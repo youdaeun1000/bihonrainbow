@@ -13,7 +13,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CATEGORIES[1]);
   const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState('14:00'); // 기본값 오후 2시
   const [location, setLocation] = useState('');
   const [capacity, setCapacity] = useState(4);
   const [description, setDescription] = useState('');
@@ -21,6 +21,12 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
   const [moodTags, setMoodTags] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 시간 옵션 생성 (00:00 ~ 23:00)
+  const timeOptions = Array.from({ length: 24 }).map((_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return `${hour}:00`;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,15 +123,23 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-xs font-medium"
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-2 uppercase tracking-widest">시간</label>
-              <input
-                type="time"
+            <div className="relative">
+              <label className="block text-xs font-bold text-slate-800 mb-2 uppercase tracking-widest">시간 (정시 단위)</label>
+              <select
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 disabled={isSubmitting}
-                className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-xs font-medium"
-              />
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium appearance-none"
+              >
+                {timeOptions.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-[38px] pointer-events-none text-slate-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
           </div>
 

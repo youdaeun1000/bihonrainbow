@@ -7,9 +7,11 @@ interface ChatRoomViewProps {
   user: UserProfile;
   meeting: Meeting;
   onBack: () => void;
+  onShowDetail: (id: string) => void;
+  onBlockUser: (targetUserId: string) => Promise<void>;
 }
 
-const ChatRoomView: React.FC<ChatRoomViewProps> = ({ user, meeting, onBack }) => {
+const ChatRoomView: React.FC<ChatRoomViewProps> = ({ user, meeting, onBack, onShowDetail, onBlockUser }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -56,23 +58,38 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({ user, meeting, onBack }) =>
     }
   };
 
+  // 차단된 유저 메시지 제외
+  const filteredMessages = messages.filter(msg => !user.blockedUserIds.includes(msg.senderId));
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden page-enter">
       {/* Chat Header */}
       <header className="h-16 flex items-center justify-between px-6 bg-white border-b border-slate-100 shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-slate-600">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </button>
-          <div className="flex flex-col">
-            <h3 className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{meeting.title}</h3>
+          <div className="flex flex-col min-w-0">
+            <h3 className="text-sm font-bold text-slate-800 truncate">{meeting.title}</h3>
             <span className="text-[10px] text-teal-500 font-bold uppercase">멤버 라운지</span>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-          {meeting.currentParticipants}명 참여 중
+        
+        <div className="flex items-center gap-2 shrink-0">
+          <button 
+            onClick={() => onShowDetail(meeting.id)}
+            className="p-2 text-slate-400 hover:text-teal-500 transition-colors"
+            title="모임 정보 보기"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full whitespace-nowrap">
+            {meeting.currentParticipants}명
+          </div>
         </div>
       </header>
 
@@ -88,11 +105,21 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({ user, meeting, onBack }) =>
           </p>
         </div>
 
-        {messages.map((msg) => {
+        {filteredMessages.map((msg) => {
           const isMine = msg.senderId === user.id;
           return (
-            <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1`}>
-              {!isMine && <span className="text-[10px] font-bold text-slate-400 ml-1">{msg.senderName}</span>}
+            <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} gap-1 group`}>
+              {!isMine && (
+                <div className="flex items-center gap-2 ml-1">
+                  <span className="text-[10px] font-bold text-slate-400">{msg.senderName}</span>
+                  <button 
+                    onClick={() => onBlockUser(msg.senderId)}
+                    className="text-[9px] text-slate-300 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    차단
+                  </button>
+                </div>
+              )}
               <div 
                 className={`max-w-[80%] px-4 py-3 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
                   isMine 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, UserProfile, Meeting, UserParticipation } from './types';
 import { MOCK_MEETINGS } from './constants';
-import { db, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc } from './firebase';
+import { db, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc, arrayUnion } from './firebase';
 import PhoneAuthView from './views/PhoneAuthView';
 import DocumentUploadView from './views/DocumentUploadView';
 import ProfileSetupView from './views/ProfileSetupView';
@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [participations, setParticipations] = useState<UserParticipation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // 1. 초기 데이터 로드 및 실시간 모임 감시
   useEffect(() => {
@@ -31,7 +32,7 @@ const App: React.FC = () => {
     
     // 유저 정보 복구
     if (savedUserId) {
-      getDoc(doc(db, 'users', savedUserId)).then(docSnap => {
+      const unsubUser = onSnapshot(doc(db, 'users', savedUserId), (docSnap) => {
         if (docSnap.exists()) {
           setUser(docSnap.data() as UserProfile);
         }
@@ -46,7 +47,10 @@ const App: React.FC = () => {
         }));
         setParticipations(parts);
       });
-      return () => unsubParticipations();
+      return () => {
+        unsubUser();
+        unsubParticipations();
+      };
     }
   }, []);
 
@@ -94,16 +98,6 @@ const App: React.FC = () => {
       setUser(newUser);
       localStorage.setItem('bihon_user_id', userId);
       setView('WELCOME');
-      
-      // 참여 정보 리스너 새로 등록
-      const q = query(collection(db, 'participations'), where('userId', '==', userId));
-      onSnapshot(q, (snapshot) => {
-        const parts = snapshot.docs.map(doc => ({
-          meetingId: doc.data().meetingId,
-          isPrivate: doc.data().isPrivate
-        }));
-        setParticipations(parts);
-      });
     } catch (e) {
       console.error("Error adding user: ", e);
       alert("프로필 저장 중 오류가 발생했습니다.");
@@ -142,8 +136,35 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBlockUser = async (targetUserId: string) => {
+    if (!user) return;
+    if (user.id === targetUserId) return;
+    if (user.blockedUserIds.includes(targetUserId)) return;
+
+    if (window.confirm("이 사용자를 차단하시겠습니까? 차단 시 이 사용자의 모임과 메시지가 더 이상 보이지 않습니다.")) {
+      try {
+        const userRef = doc(db, 'users', user.id);
+        await updateDoc(userRef, {
+          blockedUserIds: arrayUnion(targetUserId)
+        });
+        // onSnapshot으로 자동 업데이트됨
+      } catch (e) {
+        console.error("Error blocking user: ", e);
+      }
+    }
+  };
+
   const handleJoinMeeting = async (meetingId: string) => {
     if (!user) { setView('AUTH_PHONE'); return; }
+    
+    const targetMeeting = meetings.find(m => m.id === meetingId);
+    if (!targetMeeting) return;
+
+    if (targetMeeting.currentParticipants >= targetMeeting.capacity) {
+      alert("이미 정원이 가득 찬 모임입니다.");
+      return;
+    }
+
     if (!user.isCertified) {
       setPendingAction(() => () => handleJoinMeeting(meetingId));
       setView('BETA_DECLARATION');
@@ -168,27 +189,31 @@ const App: React.FC = () => {
         console.error("Error joining meeting: ", e);
       }
     }
-    setView('CHATTING'); // 참여 후 바로 채팅 목록으로 이동
+    setActiveChatId(meetingId);
+    setView('CHAT_ROOM');
   };
 
-  const handleKickParticipant = async (meetingId: string, userId: string) => {
+  const handleKickMembers = async (meetingId: string, userIds: string[]) => {
+    if (userIds.length === 0) return;
+    
     try {
-      const q = query(
-        collection(db, 'participations'), 
-        where('meetingId', '==', meetingId),
-        where('userId', '==', userId)
-      );
-      const snapshot = await getDocs(q);
-      
-      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
+      for (const uid of userIds) {
+        const q = query(
+          collection(db, 'participations'), 
+          where('meetingId', '==', meetingId),
+          where('userId', '==', uid)
+        );
+        const snapshot = await getDocs(q);
+        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+      }
 
       const meetingRef = doc(db, 'meetings', meetingId);
       await updateDoc(meetingRef, {
-        currentParticipants: increment(-1)
+        currentParticipants: increment(-userIds.length)
       });
     } catch (e) {
-      console.error("Error kicking participant: ", e);
+      console.error("Error kicking participants: ", e);
       alert("내보내기 중 오류가 발생했습니다.");
     }
   };
@@ -212,8 +237,6 @@ const App: React.FC = () => {
     }
   };
 
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-
   const renderView = () => {
     return (
       <div className="page-enter">
@@ -228,14 +251,25 @@ const App: React.FC = () => {
             case 'WELCOME': 
               return <WelcomeView onFinish={() => setView('HOME')} />;
             case 'HOME': 
-              return <HomeView user={user} meetings={meetings} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => {
-                if (!user) setView('AUTH_PHONE');
-                else if (!user.isCertified) {
-                  setPendingAction(() => () => setView('CREATE_MEETING'));
-                  setView('BETA_DECLARATION');
-                }
-                else setView('CREATE_MEETING');
-              }} />;
+              return (
+                <HomeView 
+                  user={user} 
+                  meetings={meetings.filter(m => !user?.blockedUserIds.includes(m.hostId))} 
+                  onSelectMeeting={(id) => { 
+                    setActiveChatId(null);
+                    setSelectedMeetingId(id); 
+                    setView('MEETING_DETAIL'); 
+                  }} 
+                  onCreateClick={() => {
+                    if (!user) setView('AUTH_PHONE');
+                    else if (!user.isCertified) {
+                      setPendingAction(() => () => setView('CREATE_MEETING'));
+                      setView('BETA_DECLARATION');
+                    }
+                    else setView('CREATE_MEETING');
+                  }} 
+                />
+              );
             case 'MEETING_DETAIL': {
               const m = meetings.find(meeting => meeting.id === selectedMeetingId);
               return m ? (
@@ -244,9 +278,12 @@ const App: React.FC = () => {
                   meeting={m} 
                   isJoined={participations.some(p => p.meetingId === m.id)} 
                   onJoin={handleJoinMeeting} 
-                  onKick={handleKickParticipant}
-                  onBlockHost={() => {}} 
-                  onBack={() => setView('HOME')} 
+                  onKickMembers={handleKickMembers}
+                  onBlockUser={handleBlockUser}
+                  onBack={() => {
+                    if (activeChatId) setView('CHAT_ROOM');
+                    else setView('HOME');
+                  }} 
                 />
               ) : null;
             }
@@ -265,10 +302,27 @@ const App: React.FC = () => {
                 />
               );
             case 'CHATTING': 
-              return <MessagesView userParticipations={participations} allMeetings={meetings} onSelectChat={(id) => { setActiveChatId(id); setView('CHAT_ROOM'); }} />;
+              return (
+                <MessagesView 
+                  userParticipations={participations} 
+                  allMeetings={meetings.filter(m => !user?.blockedUserIds.includes(m.hostId))} 
+                  onSelectChat={(id) => { setActiveChatId(id); setView('CHAT_ROOM'); }} 
+                />
+              );
             case 'CHAT_ROOM': {
               const m = meetings.find(meeting => meeting.id === activeChatId);
-              return user && m ? <ChatRoomView user={user} meeting={m} onBack={() => setView('CHATTING')} /> : null;
+              return user && m ? (
+                <ChatRoomView 
+                  user={user} 
+                  meeting={m} 
+                  onBack={() => setView('CHATTING')} 
+                  onShowDetail={(id) => {
+                    setSelectedMeetingId(id);
+                    setView('MEETING_DETAIL');
+                  }}
+                  onBlockUser={handleBlockUser}
+                />
+              ) : null;
             }
             default: 
               return <HomeView user={user} meetings={meetings} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => setView('CREATE_MEETING')} />;
@@ -283,7 +337,10 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-white relative border-x border-slate-100 shadow-sm">
-      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'AUTH_PHONE', 'BETA_DECLARATION', 'PROFILE_SETUP'].includes(view)} onBack={() => setView('HOME')} />}
+      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'AUTH_PHONE', 'BETA_DECLARATION', 'PROFILE_SETUP'].includes(view)} onBack={() => {
+        if (view === 'MEETING_DETAIL' && activeChatId) setView('CHAT_ROOM');
+        else setView('HOME');
+      }} />}
       <main className={`flex-1 overflow-y-auto ${showNav ? 'pb-32' : 'pb-16'}`}>
         {renderView()}
       </main>

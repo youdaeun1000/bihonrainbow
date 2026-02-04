@@ -14,7 +14,8 @@ import {
   where, 
   increment,
   onSnapshot,
-  orderBy
+  orderBy,
+  arrayUnion
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -29,6 +30,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Exporting necessary Firestore functionality for the application
 export { 
   db, 
   collection, 
@@ -43,5 +45,6 @@ export {
   where, 
   increment,
   onSnapshot,
-  orderBy 
+  orderBy,
+  arrayUnion
 };

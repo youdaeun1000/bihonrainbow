@@ -8,8 +8,8 @@ interface MeetingDetailViewProps {
   meeting: Meeting;
   isJoined: boolean;
   onJoin: (id: string) => void;
-  onKick: (meetingId: string, userId: string) => Promise<void>;
-  onBlockHost: () => void;
+  onKickMembers: (meetingId: string, userIds: string[]) => Promise<void>;
+  onBlockUser: (targetUserId: string) => Promise<void>;
   onBack: () => void;
 }
 
@@ -18,11 +18,15 @@ interface ParticipantInfo {
   nickname: string;
 }
 
-const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, isJoined, onJoin, onKick, onBack }) => {
+const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, isJoined, onJoin, onKickMembers, onBlockUser, onBack }) => {
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
+  const [isManageMode, setIsManageMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isKicking, setIsKicking] = useState(false);
 
   const isHost = user?.id === meeting.hostId;
+  const isFull = meeting.currentParticipants >= meeting.capacity;
 
   useEffect(() => {
     if (!meeting.id) return;
@@ -47,9 +51,21 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
     return () => unsubscribe();
   }, [meeting.id]);
 
-  const handleKickClick = async (p: ParticipantInfo) => {
-    if (window.confirm(`${p.nickname}님을 모임에서 내보내시겠습니까?`)) {
-      await onKick(meeting.id, p.id);
+  const toggleSelect = (id: string) => {
+    if (id === user?.id) return; 
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  const handleKickSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`선택한 ${selectedIds.length}명의 멤버를 모임에서 내보내시겠습니까?`)) {
+      setIsKicking(true);
+      await onKickMembers(meeting.id, selectedIds);
+      setSelectedIds([]);
+      setIsManageMode(false);
+      setIsKicking(false);
     }
   };
 
@@ -57,7 +73,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
 
   return (
     <div className="flex flex-col pb-48 page-enter min-h-screen bg-white">
-      {/* Action Bar Header (Instead of Hero Image) */}
+      {/* Action Bar Header */}
       <header className="h-20 flex items-center justify-between px-6 bg-white sticky top-0 z-20">
         <button 
           onClick={onBack}
@@ -68,7 +84,19 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
           </svg>
         </button>
         <span className="text-[11px] font-black text-teal-500 uppercase tracking-widest">Detail View</span>
-        <div className="w-6"></div> {/* Spacer */}
+        <div className="w-10">
+          {isHost && participants.length > 1 && (
+            <button 
+              onClick={() => {
+                setIsManageMode(!isManageMode);
+                setSelectedIds([]);
+              }}
+              className={`text-[11px] font-bold px-3 py-1.5 rounded-full transition-all ${isManageMode ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-500'}`}
+            >
+              {isManageMode ? '취소' : '관리'}
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="px-6 flex flex-col gap-10">
@@ -126,7 +154,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">인원</span>
-              <span className="text-xs font-bold text-slate-700">{meeting.currentParticipants} / {meeting.capacity} 명</span>
+              <span className={`text-xs font-bold ${isFull ? 'text-rose-500' : 'text-slate-700'}`}>{meeting.currentParticipants} / {meeting.capacity} 명</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -144,42 +172,74 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
 
         {/* Participant List */}
         <article className="flex flex-col gap-6">
-          <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
-            <div className="w-1 h-4 bg-teal-400 rounded-full"></div>
-            함께하는 멤버 ({participants.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
+              <div className="w-1 h-4 bg-teal-400 rounded-full"></div>
+              함께하는 멤버 ({participants.length})
+            </h3>
+            {isManageMode && (
+              <span className="text-[11px] font-bold text-rose-500 animate-pulse">관리 모드 작동 중</span>
+            )}
+          </div>
+
           <div className="flex flex-col gap-3">
             {isLoadingParticipants ? (
               <div className="py-4 text-center text-slate-400 text-xs font-medium">멤버 정보를 불러오고 있어요...</div>
             ) : participants.length > 0 ? (
-              participants.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 transition-all hover:bg-slate-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-teal-50/50 rounded-full flex items-center justify-center text-lg shadow-sm border border-teal-50">
-                      {p.id === meeting.hostId ? '👑' : '🌿'}
-                    </div>
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-slate-700">{p.nickname}</span>
-                        {p.id === meeting.hostId && (
-                          <span className="text-[9px] bg-teal-100 text-teal-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Host</span>
-                        )}
-                        {p.id === user?.id && (
-                          <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">나</span>
-                        )}
+              participants.map(p => {
+                const isSelf = p.id === user?.id;
+                const isSelected = selectedIds.includes(p.id);
+                const isBlocked = user?.blockedUserIds.includes(p.id);
+
+                return (
+                  <div 
+                    key={p.id} 
+                    onClick={() => isManageMode && !isSelf && toggleSelect(p.id)}
+                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                      isSelected ? 'bg-rose-50 border-rose-100' : 'bg-white border-slate-100'
+                    } ${isManageMode && !isSelf ? 'cursor-pointer active:scale-95' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {isManageMode && !isSelf && (
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-rose-500 border-rose-500' : 'bg-white border-slate-200'}`}>
+                           {isSelected && (
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                             </svg>
+                           )}
+                        </div>
+                      )}
+                      <div className="w-10 h-10 bg-teal-50/50 rounded-full flex items-center justify-center text-lg shadow-sm border border-teal-50">
+                        {p.id === meeting.hostId ? '👑' : '🌿'}
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${isBlocked ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
+                            {p.nickname}
+                          </span>
+                          {p.id === meeting.hostId && (
+                            <span className="text-[9px] bg-teal-100 text-teal-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Host</span>
+                          )}
+                          {isSelf && (
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">나</span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    
+                    {!isManageMode && !isSelf && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onBlockUser(p.id); }}
+                        className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors ${
+                          isBlocked ? 'bg-slate-50 text-slate-300' : 'bg-slate-100 text-slate-400 hover:text-rose-500'
+                        }`}
+                      >
+                        {isBlocked ? '차단됨' : '차단'}
+                      </button>
+                    )}
                   </div>
-                  {isHost && p.id !== user?.id && (
-                    <button 
-                      onClick={() => handleKickClick(p)}
-                      className="px-3 py-1.5 bg-white border border-rose-100 text-rose-500 text-[11px] font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm active:scale-95"
-                    >
-                      내보내기
-                    </button>
-                  )}
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl text-[12px] text-slate-400 font-medium bg-slate-50/50">
                 아직 참여한 멤버가 없습니다.
@@ -214,14 +274,35 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
       </div>
 
       {/* Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-6 glass-nav z-40 flex flex-col">
-        <button 
-          onClick={() => onJoin(meeting.id)}
-          disabled={isJoined}
-          className={`w-full font-bold py-5 rounded-full shadow-lg transition-all duration-500 active:scale-[0.98] text-[13px] tracking-tight ${isJoined ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad]'}`}
-        >
-          {isJoined ? '참여가 확정되었습니다' : (user?.isCertified ? '참여 신청하기' : '신뢰 선언 후 참여')}
-        </button>
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-6 glass-nav z-40 flex flex-col gap-3">
+        {isManageMode ? (
+          <button 
+            onClick={handleKickSelected}
+            disabled={selectedIds.length === 0 || isKicking}
+            className={`w-full font-bold py-5 rounded-full shadow-lg transition-all active:scale-[0.98] text-[13px] tracking-tight flex items-center justify-center gap-2 ${
+              selectedIds.length === 0 || isKicking 
+                ? 'bg-slate-100 text-slate-300' 
+                : 'bg-rose-500 text-white hover:bg-rose-600'
+            }`}
+          >
+            {isKicking ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                내보내는 중...
+              </>
+            ) : (
+              `선택한 멤버 ${selectedIds.length}명 내보내기`
+            )}
+          </button>
+        ) : (
+          <button 
+            onClick={() => onJoin(meeting.id)}
+            disabled={isJoined || isFull}
+            className={`w-full font-bold py-5 rounded-full shadow-lg transition-all duration-500 active:scale-[0.98] text-[13px] tracking-tight ${isJoined || isFull ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad]'}`}
+          >
+            {isJoined ? '참여가 확정되었습니다' : isFull ? '모집이 완료되었습니다' : (user?.isCertified ? '참여 신청하기' : '신뢰 선언 후 참여')}
+          </button>
+        )}
       </div>
     </div>
   );

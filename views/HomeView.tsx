@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { UserProfile, Meeting } from '../types';
 import { CATEGORIES } from '../constants';
+import AppLogo from '../components/AppLogo';
 
 interface HomeViewProps {
   user: UserProfile | null;
@@ -21,22 +22,18 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
       selectedCategory === '전체' || m.category === selectedCategory
     );
 
-    // 정렬 로직
     result = [...result].sort((a, b) => {
       if (sortOrder === 'START_SOON') {
-        // 시작일 순 (빠른 날짜 우선)
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         return dateA - dateB;
       } else {
-        // 올린순 (최신 생성 우선)
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a.id.replace('meeting_', ''));
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b.id.replace('meeting_', ''));
         return timeB - timeA;
       }
     });
 
-    // 맞춤 추천이 있는 경우 상단으로 올림 (동일 조건 내에서)
     if (user) {
       result.sort((a, b) => {
         const aMatch = user.interests.some(interest => a.category.includes(interest) || a.title.includes(interest)) ? 1 : 0;
@@ -51,12 +48,15 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
   return (
     <div className="flex flex-col gap-8 pt-6 px-6 pb-40 page-enter">
       {/* Welcome Message */}
-      <header className="flex flex-col gap-2">
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
-          {user ? `${user.nickname}님, 반가워요!` : '안녕하세요!'} <br/> 
-          <span className="text-[#2DD4BF]">오늘 어떤 즐거움을 찾을까요?</span>
-        </h2>
-        <p className="text-sm text-slate-400 font-light">비 온 뒤 새벽처럼 맑은 일상을 공유해요.</p>
+      <header className="flex items-start justify-between">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
+            {user ? `${user.nickname}님, 반가워요!` : '안녕하세요!'} <br/> 
+            <span className="text-[#2DD4BF]">오늘 어떤 즐거움을 찾을까요?</span>
+          </h2>
+          <p className="text-sm text-slate-400 font-light">비 온 뒤 새벽처럼 맑은 일상을 공유해요.</p>
+        </div>
+        <AppLogo size={56} animate className="-mt-1" />
       </header>
 
       {/* Category Tabs & Sort Toggles */}
@@ -109,7 +109,6 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
               onClick={() => onSelectMeeting(meeting.id)}
               className="group bg-white rounded-[32px] border border-slate-100 card-shadow transition-transform hover:-translate-y-1 cursor-pointer p-6 flex flex-col gap-4"
             >
-              {/* Badge Row */}
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
                   <span className="bg-teal-50 px-3 py-1 rounded-full text-[10px] font-bold text-teal-600">
@@ -177,7 +176,7 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
         onClick={onCreateClick}
         className="fixed bottom-32 right-6 h-14 px-6 bg-[#2DD4BF] text-white rounded-full shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 z-20"
       >
-        <svg xmlns="http://www.w3.org/2000/exports" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
         <span className="text-sm font-bold">모임 제안</span>
