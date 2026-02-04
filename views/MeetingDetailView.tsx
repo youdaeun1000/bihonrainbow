@@ -1,17 +1,58 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Meeting, UserProfile } from '../types';
+import { db, collection, query, where, onSnapshot, getDoc, doc } from '../firebase';
 
 interface MeetingDetailViewProps {
   user: UserProfile | null;
   meeting: Meeting;
   isJoined: boolean;
   onJoin: (id: string) => void;
+  onKick: (meetingId: string, userId: string) => Promise<void>;
   onBlockHost: () => void;
   onBack: () => void;
 }
 
-const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, isJoined, onJoin, onBack }) => {
+interface ParticipantInfo {
+  id: string;
+  nickname: string;
+}
+
+const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, isJoined, onJoin, onKick, onBack }) => {
+  const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
+
+  const isHost = user?.id === meeting.hostId;
+
+  useEffect(() => {
+    if (!meeting.id) return;
+
+    const q = query(collection(db, 'participations'), where('meetingId', '==', meeting.id));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      setIsLoadingParticipants(true);
+      const participantPromises = snapshot.docs.map(async (pDoc) => {
+        const userId = pDoc.data().userId;
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          return { id: userId, nickname: userDoc.data().nickname };
+        }
+        return { id: userId, nickname: '알 수 없는 사용자' };
+      });
+
+      const results = await Promise.all(participantPromises);
+      setParticipants(results);
+      setIsLoadingParticipants(false);
+    });
+
+    return () => unsubscribe();
+  }, [meeting.id]);
+
+  const handleKickClick = async (p: ParticipantInfo) => {
+    if (window.confirm(`${p.nickname}님을 모임에서 내보내시겠습니까?`)) {
+      await onKick(meeting.id, p.id);
+    }
+  };
+
   if (!meeting) return null;
 
   return (
@@ -101,6 +142,54 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
           </div>
         </div>
 
+        {/* Participant List (Visible to everyone) */}
+        <article className="flex flex-col gap-6">
+          <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
+            <div className="w-1 h-4 bg-teal-400 rounded-full"></div>
+            참여 멤버 ({participants.length})
+          </h3>
+          <div className="flex flex-col gap-3">
+            {isLoadingParticipants ? (
+              <div className="py-4 text-center text-slate-400 text-xs font-medium">멤버 목록을 불러오고 있어요...</div>
+            ) : participants.length > 0 ? (
+              participants.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:bg-slate-100/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-slate-200">
+                      {p.id === meeting.hostId ? '👑' : '🌿'}
+                    </div>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-700">{p.nickname}</span>
+                        {p.id === meeting.hostId && (
+                          <span className="text-[9px] bg-teal-100 text-teal-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Host</span>
+                        )}
+                        {p.id === user?.id && (
+                          <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">나</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">참여 중</span>
+                    </div>
+                  </div>
+                  {/* 내보내기 버튼 (호스트 전용, 자신은 제외) */}
+                  {isHost && p.id !== user?.id && (
+                    <button 
+                      onClick={() => handleKickClick(p)}
+                      className="px-3 py-1.5 bg-white border border-rose-100 text-rose-500 text-[11px] font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm active:scale-95"
+                    >
+                      내보내기
+                    </button>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl text-[12px] text-slate-400 font-medium bg-slate-50/50">
+                아직 참여한 멤버가 없습니다.
+              </div>
+            )}
+          </div>
+        </article>
+
         {/* Description */}
         <article className="flex flex-col gap-6">
           <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
@@ -131,7 +220,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
         <button 
           onClick={() => onJoin(meeting.id)}
           disabled={isJoined}
-          className={`w-full font-bold py-5 rounded-full shadow-lg transition-all duration-500 active:scale-[0.98] text-[13px] tracking-tight ${isJoined ? 'bg-slate-100 text-slate-400' : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad]'}`}
+          className={`w-full font-bold py-5 rounded-full shadow-lg transition-all duration-500 active:scale-[0.98] text-[13px] tracking-tight ${isJoined ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad]'}`}
         >
           {isJoined ? '참여가 확정되었습니다' : (user?.isCertified ? '참여 신청하기' : '신뢰 선언 후 참여')}
         </button>

@@ -10,26 +10,47 @@ interface HomeViewProps {
   onCreateClick: () => void;
 }
 
+type SortOrder = 'START_SOON' | 'NEWEST';
+
 const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, onCreateClick }) => {
   const [selectedCategory, setSelectedCategory] = useState('전체');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('START_SOON');
 
-  // 로컬 추천 로직: 사용자의 관심사와 카테고리가 일치하는 모임을 우선 순위로 정렬
-  const sortedMeetings = useMemo(() => {
-    const filtered = meetings.filter(m => 
+  const filteredAndSortedMeetings = useMemo(() => {
+    let result = meetings.filter(m => 
       selectedCategory === '전체' || m.category === selectedCategory
     );
 
-    if (!user) return filtered;
-
-    return [...filtered].sort((a, b) => {
-      const aMatch = user.interests.some(interest => a.category.includes(interest) || a.title.includes(interest)) ? 1 : 0;
-      const bMatch = user.interests.some(interest => b.category.includes(interest) || b.title.includes(interest)) ? 1 : 0;
-      return bMatch - aMatch;
+    // 정렬 로직
+    result = [...result].sort((a, b) => {
+      if (sortOrder === 'START_SOON') {
+        // 시작일 순 (빠른 날짜 우선)
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateA - dateB;
+      } else {
+        // 올린순 (최신 생성 우선)
+        // createdAt이 없으면 id(timestamp 포함)를 기준으로 정렬
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a.id.replace('meeting_', ''));
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b.id.replace('meeting_', ''));
+        return timeB - timeA;
+      }
     });
-  }, [user, meetings, selectedCategory]);
+
+    // 맞춤 추천이 있는 경우 상단으로 올림 (동일 조건 내에서)
+    if (user) {
+      result.sort((a, b) => {
+        const aMatch = user.interests.some(interest => a.category.includes(interest) || a.title.includes(interest)) ? 1 : 0;
+        const bMatch = user.interests.some(interest => b.category.includes(interest) || b.title.includes(interest)) ? 1 : 0;
+        return bMatch - aMatch;
+      });
+    }
+
+    return result;
+  }, [user, meetings, selectedCategory, sortOrder]);
 
   return (
-    <div className="flex flex-col gap-10 pt-6 px-6 pb-40 page-enter">
+    <div className="flex flex-col gap-8 pt-6 px-6 pb-40 page-enter">
       {/* Welcome Message */}
       <header className="flex flex-col gap-2">
         <h2 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
@@ -39,9 +60,9 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
         <p className="text-sm text-slate-400 font-light">비 온 뒤 새벽처럼 맑은 일상을 공유해요.</p>
       </header>
 
-      {/* Category Tabs */}
-      <section className="sticky top-20 z-10 bg-[#F8FAFC]/80 backdrop-blur-md py-2 -mx-2 px-2">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+      {/* Category Tabs & Sort Toggles */}
+      <div className="flex flex-col gap-4 sticky top-20 z-10 bg-[#F8FAFC]/90 backdrop-blur-md py-3 -mx-2 px-2">
+        <section className="flex gap-2 overflow-x-auto scrollbar-hide">
           {CATEGORIES.map(cat => (
             <button
               key={cat}
@@ -55,12 +76,32 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
               {cat}
             </button>
           ))}
-        </div>
-      </section>
+        </section>
+
+        <section className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setSortOrder('START_SOON')}
+              className={`text-[11px] font-bold flex items-center gap-1.5 transition-colors ${sortOrder === 'START_SOON' ? 'text-teal-600' : 'text-slate-400'}`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${sortOrder === 'START_SOON' ? 'bg-teal-500' : 'bg-transparent'}`}></div>
+              시작순
+            </button>
+            <button 
+              onClick={() => setSortOrder('NEWEST')}
+              className={`text-[11px] font-bold flex items-center gap-1.5 transition-colors ${sortOrder === 'NEWEST' ? 'text-teal-600' : 'text-slate-400'}`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${sortOrder === 'NEWEST' ? 'bg-teal-500' : 'bg-transparent'}`}></div>
+              올린순
+            </button>
+          </div>
+          <span className="text-[10px] text-slate-300 font-medium">총 {filteredAndSortedMeetings.length}개</span>
+        </section>
+      </div>
 
       {/* Main List */}
       <section className="flex flex-col gap-8">
-        {sortedMeetings.map((meeting) => {
+        {filteredAndSortedMeetings.map((meeting) => {
           const isRecommended = user && user.interests.some(interest => meeting.category.includes(interest));
           
           return (
@@ -106,7 +147,7 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                          </svg>
-                         {meeting.date?.split(' ')[0] || meeting.date}
+                         {meeting.date}
                       </div>
                       <div className="flex items-center gap-1">
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -124,7 +165,7 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
             </div>
           );
         })}
-        {sortedMeetings.length === 0 && (
+        {filteredAndSortedMeetings.length === 0 && (
           <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-[40px] bg-slate-50/50">
              <p className="text-slate-400 text-sm">해당 카테고리의 모임이 아직 없어요.</p>
           </div>

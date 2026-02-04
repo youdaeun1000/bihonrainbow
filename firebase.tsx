@@ -9,10 +9,12 @@ import {
   getDocs, 
   addDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   where, 
   increment,
-  onSnapshot
+  onSnapshot,
+  orderBy
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -36,8 +38,10 @@ export {
   getDocs, 
   addDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   where, 
   increment,
-  onSnapshot 
+  onSnapshot,
+  orderBy 
 };

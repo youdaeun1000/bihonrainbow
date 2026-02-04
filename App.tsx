@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, UserProfile, Meeting, UserParticipation } from './types';
 import { MOCK_MEETINGS } from './constants';
-// Added 'where' to the imports from firebase
-import { db, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where } from './firebase';
+import { db, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc } from './firebase';
 import PhoneAuthView from './views/PhoneAuthView';
 import DocumentUploadView from './views/DocumentUploadView';
 import ProfileSetupView from './views/ProfileSetupView';
@@ -12,6 +11,7 @@ import HomeView from './views/HomeView';
 import MeetingDetailView from './views/MeetingDetailView';
 import MyPageView from './views/MyPageView';
 import MessagesView from './views/MessagesView';
+import ChatRoomView from './views/ChatRoomView';
 import CreateMeetingView from './views/CreateMeetingView';
 import Header from './components/Header';
 import NavigationBar from './components/NavigationBar';
@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [participations, setParticipations] = useState<UserParticipation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
   // 1. 초기 데이터 로드 및 실시간 모임 감시
   useEffect(() => {
@@ -36,17 +37,20 @@ const App: React.FC = () => {
         }
       });
 
-      // 참여 정보 복구
+      // 참여 정보 복구 (실시간)
       const q = query(collection(db, 'participations'), where('userId', '==', savedUserId));
-      onSnapshot(q, (snapshot) => {
+      const unsubParticipations = onSnapshot(q, (snapshot) => {
         const parts = snapshot.docs.map(doc => ({
           meetingId: doc.data().meetingId,
           isPrivate: doc.data().isPrivate
         }));
         setParticipations(parts);
       });
+      return () => unsubParticipations();
     }
+  }, []);
 
+  useEffect(() => {
     // 모임 목록 실시간 업데이트
     const meetingsQuery = query(collection(db, 'meetings'));
     const unsubscribe = onSnapshot(meetingsQuery, (snapshot) => {
@@ -55,7 +59,6 @@ const App: React.FC = () => {
         ...doc.data()
       })) as Meeting[];
       
-      // Firestore에 데이터가 없으면 Mock 데이터로 시작 (최초 1회)
       if (meetingsData.length === 0) {
         setMeetings(MOCK_MEETINGS);
       } else {
@@ -87,11 +90,20 @@ const App: React.FC = () => {
     };
 
     try {
-      // Firestore 'users' 컬렉션에 저장
       await setDoc(doc(db, 'users', userId), newUser);
       setUser(newUser);
       localStorage.setItem('bihon_user_id', userId);
       setView('WELCOME');
+      
+      // 참여 정보 리스너 새로 등록
+      const q = query(collection(db, 'participations'), where('userId', '==', userId));
+      onSnapshot(q, (snapshot) => {
+        const parts = snapshot.docs.map(doc => ({
+          meetingId: doc.data().meetingId,
+          isPrivate: doc.data().isPrivate
+        }));
+        setParticipations(parts);
+      });
     } catch (e) {
       console.error("Error adding user: ", e);
       alert("프로필 저장 중 오류가 발생했습니다.");
@@ -117,6 +129,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateProfile = async (data: { nickname: string; bio: string }) => {
+    if (user) {
+      try {
+        const userRef = doc(db, 'users', user.id);
+        await updateDoc(userRef, data);
+        setUser({ ...user, ...data });
+      } catch (e) {
+        console.error("Error updating profile: ", e);
+        throw e;
+      }
+    }
+  };
+
   const handleJoinMeeting = async (meetingId: string) => {
     if (!user) { setView('AUTH_PHONE'); return; }
     if (!user.isCertified) {
@@ -128,7 +153,6 @@ const App: React.FC = () => {
     const isAlreadyJoined = participations.some(p => p.meetingId === meetingId);
     if (!isAlreadyJoined) {
       try {
-        // 1. 참여 정보 저장
         await addDoc(collection(db, 'participations'), {
           userId: user.id,
           meetingId: meetingId,
@@ -136,7 +160,6 @@ const App: React.FC = () => {
           joinedAt: new Date()
         });
 
-        // 2. 모임 인원수 증가
         const meetingRef = doc(db, 'meetings', meetingId);
         await updateDoc(meetingRef, {
           currentParticipants: increment(1)
@@ -145,16 +168,47 @@ const App: React.FC = () => {
         console.error("Error joining meeting: ", e);
       }
     }
-    setView('HOME');
+    setView('CHATTING'); // 참여 후 바로 채팅 목록으로 이동
+  };
+
+  const handleKickParticipant = async (meetingId: string, userId: string) => {
+    try {
+      const q = query(
+        collection(db, 'participations'), 
+        where('meetingId', '==', meetingId),
+        where('userId', '==', userId)
+      );
+      const snapshot = await getDocs(q);
+      
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+
+      const meetingRef = doc(db, 'meetings', meetingId);
+      await updateDoc(meetingRef, {
+        currentParticipants: increment(-1)
+      });
+    } catch (e) {
+      console.error("Error kicking participant: ", e);
+      alert("내보내기 중 오류가 발생했습니다.");
+    }
   };
 
   const handleCreateMeetingComplete = async (meetingData: Meeting) => {
     try {
       const { id, ...dataWithoutId } = meetingData;
-      await setDoc(doc(db, 'meetings', meetingData.id), dataWithoutId);
+      await setDoc(doc(db, 'meetings', id), dataWithoutId);
+      
+      await addDoc(collection(db, 'participations'), {
+        userId: user!.id,
+        meetingId: id,
+        isPrivate: false,
+        joinedAt: new Date()
+      });
+
       setView('HOME');
     } catch (e) {
       console.error("Error creating meeting: ", e);
+      throw e;
     }
   };
 
@@ -184,14 +238,38 @@ const App: React.FC = () => {
               }} />;
             case 'MEETING_DETAIL': {
               const m = meetings.find(meeting => meeting.id === selectedMeetingId);
-              return m ? <MeetingDetailView user={user} meeting={m} isJoined={participations.some(p => p.meetingId === m.id)} onJoin={handleJoinMeeting} onBlockHost={() => {}} onBack={() => setView('HOME')} /> : null;
+              return m ? (
+                <MeetingDetailView 
+                  user={user} 
+                  meeting={m} 
+                  isJoined={participations.some(p => p.meetingId === m.id)} 
+                  onJoin={handleJoinMeeting} 
+                  onKick={handleKickParticipant}
+                  onBlockHost={() => {}} 
+                  onBack={() => setView('HOME')} 
+                />
+              ) : null;
             }
             case 'CREATE_MEETING': 
               return <CreateMeetingView user={user!} onComplete={handleCreateMeetingComplete} onBack={() => setView('HOME')} />;
             case 'MY_PAGE': 
-              return <MyPageView user={user} participations={participations} allMeetings={meetings} onToggleVisibility={() => {}} onLogout={() => { setUser(null); localStorage.removeItem('bihon_user_id'); setView('HOME'); }} />;
+              return (
+                <MyPageView 
+                  user={user} 
+                  participations={participations} 
+                  allMeetings={meetings} 
+                  onToggleVisibility={() => {}} 
+                  onLogout={() => { setUser(null); localStorage.removeItem('bihon_user_id'); setView('HOME'); }} 
+                  onUpdateProfile={handleUpdateProfile}
+                  onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }}
+                />
+              );
             case 'CHATTING': 
-              return <MessagesView />;
+              return <MessagesView userParticipations={participations} allMeetings={meetings} onSelectChat={(id) => { setActiveChatId(id); setView('CHAT_ROOM'); }} />;
+            case 'CHAT_ROOM': {
+              const m = meetings.find(meeting => meeting.id === activeChatId);
+              return user && m ? <ChatRoomView user={user} meeting={m} onBack={() => setView('CHATTING')} /> : null;
+            }
             default: 
               return <HomeView user={user} meetings={meetings} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => setView('CREATE_MEETING')} />;
           }

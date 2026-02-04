@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { UserProfile, Meeting, UserParticipation } from '../types';
 
 interface MyPageViewProps {
@@ -8,14 +8,27 @@ interface MyPageViewProps {
   allMeetings: Meeting[];
   onToggleVisibility: (meetingId: string) => void;
   onLogout: () => void;
+  onUpdateProfile: (data: { nickname: string; bio: string }) => Promise<void>;
+  onSelectMeeting: (meetingId: string) => void;
 }
 
-const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetings, onLogout }) => {
+const MyPageView: React.FC<MyPageViewProps> = ({ 
+  user, 
+  participations, 
+  allMeetings, 
+  onLogout, 
+  onUpdateProfile,
+  onSelectMeeting 
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editNickname, setEditNickname] = useState(user?.nickname || '');
+  const [editBio, setEditBio] = useState(user?.bio || '');
+  const [isSaving, setIsSaving] = useState(false);
+
   const myMeetingsData = useMemo(() => {
     return participations
       .map(p => {
         const meeting = allMeetings.find(m => m.id === p.meetingId);
-        // 모임을 찾지 못한 경우 null 반환하여 필터링 가능하게 함
         if (!meeting) return null;
         return { ...meeting, isPrivate: p.isPrivate };
       })
@@ -26,6 +39,20 @@ const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetin
         return dateA - dateB;
       });
   }, [participations, allMeetings]);
+
+  const handleSave = async () => {
+    if (!editNickname.trim()) return;
+    setIsSaving(true);
+    try {
+      await onUpdateProfile({ nickname: editNickname, bio: editBio });
+      setIsEditing(false);
+    } catch (e) {
+      console.error(e);
+      alert("프로필 수정 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -48,7 +75,34 @@ const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetin
   return (
     <div className="flex flex-col gap-14 px-6 pt-10 pb-40 page-enter">
       {/* Profile Header */}
-      <section className="flex flex-col items-center gap-6">
+      <section className="flex flex-col items-center gap-6 relative">
+        <div className="absolute top-0 right-0">
+          {!isEditing ? (
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="text-xs font-bold text-teal-500 bg-teal-50 px-4 py-2 rounded-full hover:bg-teal-100 transition-all"
+            >
+              수정하기
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setIsEditing(false); setEditNickname(user.nickname); setEditBio(user.bio); }}
+                className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-2 rounded-full"
+              >
+                취소
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={isSaving}
+                className="text-xs font-bold text-white bg-teal-500 px-4 py-2 rounded-full shadow-md disabled:bg-slate-200"
+              >
+                {isSaving ? '...' : '저장'}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="relative">
           <div className="w-24 h-24 bg-teal-50 rounded-full border border-teal-100 flex items-center justify-center text-4xl shadow-sm">
             🌿
@@ -61,11 +115,37 @@ const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetin
              </div>
           )}
         </div>
-        <div className="flex flex-col items-center gap-3">
-           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{user.nickname}</h2>
-           <p className="mt-2 text-[13px] text-slate-500 text-center font-light leading-relaxed max-w-[280px]">
-            "{user.bio || '나만의 일상을 소개하는 한 마디를 적어보세요.'}"
-          </p>
+
+        <div className="flex flex-col items-center gap-3 w-full">
+          {isEditing ? (
+            <div className="flex flex-col gap-4 w-full mt-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-teal-600 uppercase tracking-widest px-1">Nickname</label>
+                <input 
+                  value={editNickname}
+                  onChange={(e) => setEditNickname(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-2xl text-center font-bold text-slate-800 focus:outline-none focus:border-teal-200"
+                  placeholder="닉네임 입력"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-teal-600 uppercase tracking-widest px-1">Bio</label>
+                <textarea 
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-2xl text-[13px] font-light leading-relaxed min-h-[100px] text-center focus:outline-none focus:border-teal-200"
+                  placeholder="자기소개를 입력해 주세요."
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{user.nickname}</h2>
+              <p className="mt-2 text-[13px] text-slate-500 text-center font-light leading-relaxed max-w-[280px]">
+                "{user.bio || '나만의 일상을 소개하는 한 마디를 적어보세요.'}"
+              </p>
+            </>
+          )}
         </div>
       </section>
 
@@ -92,7 +172,11 @@ const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetin
         </h3>
         <div className="flex flex-col gap-3">
           {myMeetingsData.map(meeting => (
-            <div key={meeting.id} className="bg-white rounded-2xl p-5 border border-slate-100 flex justify-between items-center card-shadow">
+            <button 
+              key={meeting.id} 
+              onClick={() => onSelectMeeting(meeting.id)}
+              className="w-full text-left bg-white rounded-2xl p-5 border border-slate-100 flex justify-between items-center card-shadow active:scale-[0.98] transition-all hover:border-teal-100"
+            >
               <div className="flex flex-col gap-1">
                 <h4 className="font-bold text-slate-800 text-sm">{meeting.title}</h4>
                 <span className="text-[11px] text-slate-400 font-medium">
@@ -100,7 +184,7 @@ const MyPageView: React.FC<MyPageViewProps> = ({ user, participations, allMeetin
                 </span>
               </div>
               <div className="h-2 w-2 rounded-full bg-teal-400"></div>
-            </div>
+            </button>
           ))}
           {myMeetingsData.length === 0 && (
             <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50">

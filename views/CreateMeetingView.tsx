@@ -5,7 +5,7 @@ import { CATEGORIES } from '../constants';
 
 interface CreateMeetingViewProps {
   user: UserProfile;
-  onComplete: (meeting: Meeting) => void;
+  onComplete: (meeting: Meeting) => Promise<void>;
   onBack: () => void;
 }
 
@@ -20,31 +20,41 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
   const [isCertifiedOnly, setIsCertifiedOnly] = useState(false);
   const [moodTags, setMoodTags] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !date || !time || !location || !description) {
       setError('모든 필수 항목을 입력해 주세요.');
       return;
     }
 
-    const newMeeting: Meeting = {
-      id: Date.now().toString(),
-      title,
-      category,
-      date: `${date} ${time}`,
-      location,
-      capacity,
-      currentParticipants: 1,
-      description,
-      host: user.nickname,
-      hostId: user.id,
-      isCertifiedOnly,
-      imageUrl: `https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=600&seed=${Date.now()}`,
-      moodTags: moodTags.split(',').map(tag => tag.trim().replace('#', '')).filter(t => t !== '')
-    };
+    setIsSubmitting(true);
+    setError('');
 
-    onComplete(newMeeting);
+    try {
+      const newMeeting: Meeting = {
+        id: `meeting_${Date.now()}`,
+        title,
+        category,
+        date: `${date} ${time}`,
+        location,
+        capacity,
+        currentParticipants: 1,
+        description,
+        host: user.nickname,
+        hostId: user.id,
+        isCertifiedOnly,
+        imageUrl: `https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=600&seed=${Date.now()}`,
+        moodTags: moodTags.split(',').map(tag => tag.trim().replace('#', '')).filter(t => t !== ''),
+        createdAt: new Date().toISOString()
+      };
+
+      await onComplete(newMeeting);
+    } catch (err) {
+      setError('모임 등록 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,6 +72,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              disabled={isSubmitting}
               placeholder="예: 주말 산책 같이 하실 분?"
               className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium"
             />
@@ -73,6 +84,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium appearance-none"
               >
                 {CATEGORIES.filter(c => c !== '전체').map(c => (
@@ -88,6 +100,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
                 max={15}
                 value={capacity}
                 onChange={(e) => setCapacity(parseInt(e.target.value))}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium"
               />
             </div>
@@ -100,6 +113,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-xs font-medium"
               />
             </div>
@@ -109,6 +123,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-xs font-medium"
               />
             </div>
@@ -120,6 +135,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
+              disabled={isSubmitting}
               placeholder="예: 여의나루역 2번 출구 앞"
               className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium"
             />
@@ -131,6 +147,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               type="text"
               value={moodTags}
               onChange={(e) => setMoodTags(e.target.value)}
+              disabled={isSubmitting}
               placeholder="#편안한, #수다, #주말아침"
               className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all text-sm font-medium"
             />
@@ -141,6 +158,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={isSubmitting}
               placeholder="어떤 활동을 하는지, 준비물은 무엇인지 자세히 적어주세요!"
               className="w-full px-4 py-4 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all min-h-[140px] text-sm font-light leading-relaxed"
             />
@@ -157,6 +175,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
                 className="sr-only peer" 
                 checked={isCertifiedOnly}
                 onChange={(e) => setIsCertifiedOnly(e.target.checked)}
+                disabled={isSubmitting}
               />
               <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-500"></div>
             </label>
@@ -169,15 +188,26 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
           <button 
             type="button"
             onClick={onBack}
+            disabled={isSubmitting}
             className="flex-1 py-4 text-sm font-bold text-slate-400 border border-slate-100 bg-white rounded-full hover:bg-slate-50 transition-all"
           >
             뒤로 가기
           </button>
           <button 
             type="submit"
-            className="flex-[2] py-4 bg-[#2DD4BF] text-white rounded-full font-bold text-sm shadow-lg hover:bg-[#28c1ad] active:scale-95 transition-all"
+            disabled={isSubmitting}
+            className={`flex-[2] py-4 rounded-full font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 ${
+              isSubmitting 
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad] active:scale-95'
+            }`}
           >
-            모임 등록하기
+            {isSubmitting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                등록 중...
+              </>
+            ) : '모임 등록하기'}
           </button>
         </div>
       </form>

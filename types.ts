@@ -31,15 +31,25 @@ export interface Meeting {
   isCertifiedOnly: boolean;
   imageUrl: string;
   moodTags?: string[];
+  createdAt?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: any;
 }
 
 export type ViewState = 
   | 'HOME' 
   | 'AUTH_PHONE' 
-  | 'BETA_DECLARATION' // AUTH_DOC에서 변경
+  | 'BETA_DECLARATION' 
   | 'PROFILE_SETUP' 
   | 'WELCOME' 
   | 'MEETING_DETAIL' 
   | 'MY_PAGE' 
   | 'CHATTING' 
+  | 'CHAT_ROOM'
   | 'CREATE_MEETING';
