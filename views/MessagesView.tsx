@@ -28,10 +28,12 @@ const MessagesView: React.FC<MessagesViewProps> = ({ userParticipations, allMeet
           <div 
             key={chat.id} 
             onClick={() => onSelectChat(chat.id)}
-            className="group bg-white p-5 rounded-[32px] border border-slate-100 flex items-center gap-4 card-shadow transition-all hover:border-teal-100 cursor-pointer active:scale-[0.98]"
+            className="group bg-white p-6 rounded-[32px] border border-slate-100 flex items-center gap-4 card-shadow transition-all hover:border-teal-100 cursor-pointer active:scale-[0.98]"
           >
-            <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0">
-              <img src={chat.imageUrl} alt={chat.title} className="w-full h-full object-cover" />
+            <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center text-teal-500 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a.75.75 0 01-.474-.065.75.75 0 01-.356-.62c.001-.698.147-1.362.414-1.967A8.25 8.25 0 013 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+              </svg>
             </div>
             <div className="flex-1 flex flex-col gap-1 min-w-0">
               <div className="flex justify-between items-center">

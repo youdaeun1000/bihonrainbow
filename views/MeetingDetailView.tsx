@@ -56,24 +56,24 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
   if (!meeting) return null;
 
   return (
-    <div className="flex flex-col pb-48 page-enter">
-      {/* Hero Image */}
-      <div className="relative h-[320px] overflow-hidden">
-        <img src={meeting.imageUrl} alt={meeting.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/10"></div>
+    <div className="flex flex-col pb-48 page-enter min-h-screen bg-white">
+      {/* Action Bar Header (Instead of Hero Image) */}
+      <header className="h-20 flex items-center justify-between px-6 bg-white sticky top-0 z-20">
         <button 
           onClick={onBack}
-          className="absolute top-8 left-6 bg-white/30 backdrop-blur-md p-3 rounded-full text-white hover:bg-white/50 transition-all active:scale-90"
+          className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
-      </div>
+        <span className="text-[11px] font-black text-teal-500 uppercase tracking-widest">Detail View</span>
+        <div className="w-6"></div> {/* Spacer */}
+      </header>
 
-      <div className="px-6 -mt-8 relative z-10 bg-white rounded-t-[40px] pt-10 flex flex-col gap-10">
+      <div className="px-6 flex flex-col gap-10">
         {/* Core Header */}
-        <header className="flex flex-col gap-4">
+        <header className="flex flex-col gap-4 pt-4">
           <div className="flex items-center justify-between">
              <span className="px-3 py-1 bg-teal-50 text-teal-600 text-[11px] font-bold rounded-full">{meeting.category}</span>
              {meeting.isCertifiedOnly && (
@@ -94,7 +94,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
         </header>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-2 gap-6 p-6 rounded-3xl bg-slate-50 border border-slate-100">
+        <div className="grid grid-cols-2 gap-6 p-8 rounded-[32px] bg-slate-50 border border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-teal-500 shadow-sm">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -102,7 +102,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">언제</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">일정</span>
               <span className="text-xs font-bold text-slate-700">{meeting.date}</span>
             </div>
           </div>
@@ -114,7 +114,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">어디서</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">장소</span>
               <span className="text-xs font-bold text-slate-700">{meeting.location}</span>
             </div>
           </div>
@@ -125,7 +125,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">멤버</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">인원</span>
               <span className="text-xs font-bold text-slate-700">{meeting.currentParticipants} / {meeting.capacity} 명</span>
             </div>
           </div>
@@ -136,26 +136,26 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                </svg>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">호스트</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">호스트</span>
               <span className="text-xs font-bold text-slate-700">{meeting.host}</span>
             </div>
           </div>
         </div>
 
-        {/* Participant List (Visible to everyone) */}
+        {/* Participant List */}
         <article className="flex flex-col gap-6">
           <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
             <div className="w-1 h-4 bg-teal-400 rounded-full"></div>
-            참여 멤버 ({participants.length})
+            함께하는 멤버 ({participants.length})
           </h3>
           <div className="flex flex-col gap-3">
             {isLoadingParticipants ? (
-              <div className="py-4 text-center text-slate-400 text-xs font-medium">멤버 목록을 불러오고 있어요...</div>
+              <div className="py-4 text-center text-slate-400 text-xs font-medium">멤버 정보를 불러오고 있어요...</div>
             ) : participants.length > 0 ? (
               participants.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:bg-slate-100/50">
+                <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 transition-all hover:bg-slate-50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-slate-200">
+                    <div className="w-10 h-10 bg-teal-50/50 rounded-full flex items-center justify-center text-lg shadow-sm border border-teal-50">
                       {p.id === meeting.hostId ? '👑' : '🌿'}
                     </div>
                     <div className="flex flex-col">
@@ -168,10 +168,8 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                           <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">나</span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 font-medium">참여 중</span>
                     </div>
                   </div>
-                  {/* 내보내기 버튼 (호스트 전용, 자신은 제외) */}
                   {isHost && p.id !== user?.id && (
                     <button 
                       onClick={() => handleKickClick(p)}
@@ -202,14 +200,14 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
         </article>
 
         {/* Manners Section */}
-        <div className="p-8 rounded-3xl bg-teal-50 border border-teal-100 flex gap-4 items-start shadow-sm shadow-teal-900/5">
+        <div className="p-8 rounded-[32px] bg-teal-50 border border-teal-100 flex gap-4 items-start shadow-sm shadow-teal-900/5">
            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-teal-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.744c0 5.052 3.823 9.21 8.684 9.815a.485.485 0 00.632-.423m0-15.62c4.02.582 7.59 3.085 9.155 6.521a12.01 12.01 0 01-3.155 11.205m-4.987-16.1L12 3m0 0l-.013.01c-.137.017-.273.036-.408.057" />
            </svg>
            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-teal-700">모두를 위한 약속</span>
+              <span className="text-xs font-bold text-teal-700">성숙한 대화 약속</span>
               <p className="text-[12px] text-teal-800/70 font-light leading-relaxed">
-                비혼뒤맑음은 서로의 독립된 삶을 응원합니다. 가벼운 취향 공유를 통해 건강한 관계를 맺어보세요. 불쾌한 행동은 신고를 통해 즉시 관리됩니다.
+                서로의 비혼 가치관을 존중하며 다정한 거리를 유지합니다. 불쾌한 행동 시 즉시 경고 없이 퇴출될 수 있습니다.
               </p>
            </div>
         </div>
