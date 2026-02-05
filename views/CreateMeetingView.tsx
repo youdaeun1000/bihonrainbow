@@ -17,7 +17,6 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
   const [location, setLocation] = useState('');
   const [capacity, setCapacity] = useState(4);
   const [description, setDescription] = useState('');
-  const [isCertifiedOnly, setIsCertifiedOnly] = useState(false);
   const [moodTags, setMoodTags] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,7 +49,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
         description,
         host: user.nickname,
         hostId: user.id,
-        isCertifiedOnly,
+        isCertifiedOnly: false, // 인증 멤버 전용 기능은 사용하지 않으므로 false 고정
         imageUrl: `https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=600&seed=${Date.now()}`,
         moodTags: moodTags.split(',').map(tag => tag.trim().replace('#', '')).filter(t => t !== ''),
         createdAt: new Date().toISOString()
@@ -124,7 +123,7 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               />
             </div>
             <div className="relative">
-              <label className="block text-xs font-bold text-slate-800 mb-2 uppercase tracking-widest">시간 (정시 단위)</label>
+              <label className="block text-xs font-bold text-slate-800 mb-2 uppercase tracking-widest">시간</label>
               <select
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
@@ -176,23 +175,6 @@ const CreateMeetingView: React.FC<CreateMeetingViewProps> = ({ user, onComplete,
               placeholder="어떤 활동을 하는지, 준비물은 무엇인지 자세히 적어주세요!"
               className="w-full px-4 py-4 rounded-2xl bg-slate-50 border border-transparent text-slate-800 focus:outline-none focus:bg-white focus:border-teal-200 transition-all min-h-[140px] text-sm font-light leading-relaxed"
             />
-          </div>
-
-          <div className="flex items-center justify-between p-4 bg-teal-50 rounded-2xl border border-teal-100">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[12px] font-bold text-teal-700">인증 멤버 전용</span>
-              <span className="text-[10px] text-teal-600 font-medium">인증된 멤버들만 참여를 신청할 수 있습니다.</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
-                checked={isCertifiedOnly}
-                onChange={(e) => setIsCertifiedOnly(e.target.checked)}
-                disabled={isSubmitting}
-              />
-              <div className="w-10 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-500"></div>
-            </label>
           </div>
         </div>
 

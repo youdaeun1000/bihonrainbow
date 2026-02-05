@@ -15,7 +15,8 @@ import {
   increment,
   onSnapshot,
   orderBy,
-  arrayUnion
+  arrayUnion,
+  arrayRemove
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -46,5 +47,6 @@ export {
   increment,
   onSnapshot,
   orderBy,
-  arrayUnion
+  arrayUnion,
+  arrayRemove
 };

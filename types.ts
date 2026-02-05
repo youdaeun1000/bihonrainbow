@@ -6,6 +6,7 @@ export interface UserParticipation {
 
 export interface UserProfile {
   id: string;
+  phone: string;
   nickname: string;
   age: number;
   isCertified: boolean;
