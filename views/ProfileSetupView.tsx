@@ -1,10 +1,6 @@
 
 import React, { useState } from 'react';
 
-const BIHON_VALUES = [
-  '나만의 시간 선호', '커리어 집중', '반려동물과 함께', '정서적 독립', '미니멀 라이프', '여행하는 삶', '경제적 자유', '함께 공부하기', '조용한 대화'
-];
-
 interface ProfileSetupViewProps {
   onComplete: (data: any) => void;
 }
@@ -12,13 +8,6 @@ interface ProfileSetupViewProps {
 const ProfileSetupView: React.FC<ProfileSetupViewProps> = ({ onComplete }) => {
   const [nickname, setNickname] = useState('');
   const [location, setLocation] = useState('서울');
-  const [selectedValues, setSelectedValues] = useState<string[]>([]);
-
-  const toggleValue = (val: string) => {
-    setSelectedValues(prev => 
-      prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]
-    );
-  };
 
   return (
     <div className="flex flex-col gap-10 mt-4">
@@ -56,26 +45,8 @@ const ProfileSetupView: React.FC<ProfileSetupViewProps> = ({ onComplete }) => {
            </div>
         </section>
 
-        <section className="bg-white p-8 rounded-[40px] border border-teal-50 shadow-sm flex flex-col gap-6">
-           <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest">Bihon Values</label>
-              <p className="text-[10px] text-slate-400 font-light">가치관이 닮은 분들과 더 잘 연결됩니다.</p>
-           </div>
-           <div className="flex flex-wrap gap-2">
-             {BIHON_VALUES.map(val => (
-               <button
-                 key={val}
-                 onClick={() => toggleValue(val)}
-                 className={`px-4 py-2.5 rounded-2xl text-[10px] font-bold transition-all ${selectedValues.includes(val) ? 'bg-teal-500 text-white shadow-md' : 'bg-white border border-teal-50 text-slate-400 hover:border-teal-100'}`}
-               >
-                 {val}
-               </button>
-             ))}
-           </div>
-        </section>
-
         <button
-          onClick={() => onComplete({ nickname, location, interests: selectedValues })}
+          onClick={() => onComplete({ nickname, location, interests: [] })}
           disabled={!nickname.trim()}
           className={`w-full py-5 rounded-[28px] font-bold text-sm tracking-widest transition-all ${!nickname.trim() ? 'bg-slate-100 text-slate-300' : 'bg-teal-500 text-white shadow-xl shadow-teal-500/20 active:scale-95'}`}
         >

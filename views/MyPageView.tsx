@@ -2,7 +2,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { UserProfile, Meeting, UserParticipation } from '../types';
 import { db, doc, getDoc } from '../firebase';
-import { INTEREST_OPTIONS } from '../constants';
 
 interface MyPageViewProps {
   user: UserProfile | null;
@@ -33,8 +32,6 @@ const MyPageView: React.FC<MyPageViewProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editNickname, setEditNickname] = useState(user?.nickname || '');
-  const [editBio, setEditBio] = useState(user?.bio || '');
-  const [editInterests, setEditInterests] = useState<string[]>(user?.interests || []);
   const [isSaving, setIsSaving] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
@@ -81,20 +78,15 @@ const MyPageView: React.FC<MyPageViewProps> = ({
     return { upcomingMeetings: upcoming, pastMeetings: past };
   }, [participations, allMeetings]);
 
-  const toggleInterest = (interest: string) => {
-    setEditInterests(prev => 
-      prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]
-    );
-  };
-
   const handleSave = async () => {
     if (!editNickname.trim()) return;
     setIsSaving(true);
     try {
+      // bio와 interests는 빈 값으로 유지하거나 기존 값을 보존 (여기서는 삭제 요청에 따라 빈 값 전달)
       await onUpdateProfile({ 
         nickname: editNickname, 
-        bio: editBio, 
-        interests: editInterests 
+        bio: '', 
+        interests: [] 
       });
       setIsEditing(false);
     } catch (e) {
@@ -133,8 +125,6 @@ const MyPageView: React.FC<MyPageViewProps> = ({
               onClick={() => {
                 setIsEditing(true);
                 setEditNickname(user.nickname);
-                setEditBio(user.bio);
-                setEditInterests(user.interests);
               }}
               className="text-xs font-bold text-teal-500 bg-teal-50 px-4 py-2 rounded-full hover:bg-teal-100 transition-all"
             >
@@ -146,8 +136,6 @@ const MyPageView: React.FC<MyPageViewProps> = ({
                 onClick={() => { 
                     setIsEditing(false); 
                     setEditNickname(user.nickname); 
-                    setEditBio(user.bio); 
-                    setEditInterests(user.interests);
                 }}
                 className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-2 rounded-full"
               >
@@ -191,49 +179,13 @@ const MyPageView: React.FC<MyPageViewProps> = ({
                   placeholder="닉네임 입력"
                 />
               </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-bold text-teal-600 uppercase tracking-widest px-1">Interests</label>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {INTEREST_OPTIONS.map((interest) => (
-                    <button
-                      key={interest}
-                      onClick={() => toggleInterest(interest)}
-                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
-                        editInterests.includes(interest)
-                          ? 'bg-teal-500 border-teal-500 text-white shadow-sm'
-                          : 'bg-white border-slate-100 text-slate-400 hover:border-teal-100'
-                      }`}
-                    >
-                      {interest}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-teal-600 uppercase tracking-widest px-1">Bio</label>
-                <textarea 
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-2xl text-[13px] font-light leading-relaxed min-h-[100px] text-center focus:outline-none focus:border-teal-200 transition-all"
-                  placeholder="자기소개를 입력해 주세요."
-                />
-              </div>
             </div>
           ) : (
             <>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{user.nickname}</h2>
-              <div className="flex flex-wrap gap-1.5 justify-center max-w-[300px]">
-                {user.interests.map(interest => (
-                  <span key={interest} className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-100/50">
-                    {interest}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-2 text-[13px] text-slate-500 text-center font-light leading-relaxed max-w-[280px]">
-                "{user.bio || '나만의 일상을 소개하는 한 마디를 적어보세요.'}"
-              </p>
+              <span className="text-[11px] font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-100/50">
+                {user.location} 지역 기반
+              </span>
             </>
           )}
         </div>
