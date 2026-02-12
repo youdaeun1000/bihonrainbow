@@ -18,14 +18,6 @@ import {
   arrayUnion,
   arrayRemove
 } from "firebase/firestore";
-import { 
-  getAuth, 
-  signOut, 
-  onAuthStateChanged,
-  deleteUser,
-  RecaptchaVerifier,
-  signInWithPhoneNumber
-} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeOr0PbY930XoG7nn1ye5vDxeCtbvNBlo",
@@ -38,23 +30,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
-// Recaptcha verifier for phone auth
-export const createRecaptcha = (containerId: string) => {
-  return new RecaptchaVerifier(auth, containerId, {
-    'size': 'invisible',
-    'callback': () => {}
-  });
-};
-
+// Exporting necessary Firestore functionality for the application
 export { 
   db, 
-  auth,
-  signOut,
-  onAuthStateChanged,
-  deleteUser,
-  signInWithPhoneNumber,
   collection, 
   doc, 
   setDoc, 
