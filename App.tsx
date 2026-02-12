@@ -2,8 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, UserProfile, Meeting, UserParticipation } from './types';
 import { MOCK_MEETINGS } from './constants';
-import { db, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc, arrayUnion, arrayRemove, orderBy } from './firebase';
-import PhoneAuthView from './views/PhoneAuthView';
+import { 
+  db, auth, onAuthStateChanged, signOut, 
+  doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, 
+  addDoc, increment, where, getDocs, deleteDoc, arrayUnion, arrayRemove, orderBy 
+} from './firebase';
+import LoginView from './views/LoginView';
 import DocumentUploadView from './views/DocumentUploadView';
 import ProfileSetupView from './views/ProfileSetupView';
 import WelcomeView from './views/WelcomeView';
@@ -19,23 +23,41 @@ import NavigationBar from './components/NavigationBar';
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('HOME');
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [tempProfile, setTempProfile] = useState<Partial<UserProfile>>({});
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [participations, setParticipations] = useState<UserParticipation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [unreadMeetingIds, setUnreadMeetingIds] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
-    const savedUserId = localStorage.getItem('bihon_user_id');
-    if (savedUserId) {
-      const unsubUser = onSnapshot(doc(db, 'users', savedUserId), (docSnap) => {
-        if (docSnap.exists()) {
-          setUser(docSnap.data() as UserProfile);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userDocRef);
+        
+        if (userSnap.exists()) {
+          setUser(userSnap.data() as UserProfile);
+          // If user exists and is at auth/setup view, take them home
+          if (view === 'AUTH_PHONE' || view === 'PROFILE_SETUP') setView('HOME');
+        } else {
+          // Firebase auth success but no profile, go to setup
+          // We don't set user state yet as profile isn't complete
+          if (view !== 'PROFILE_SETUP') setView('PROFILE_SETUP');
         }
-      });
-      const q = query(collection(db, 'participations'), where('userId', '==', savedUserId));
+      } else {
+        setUser(null);
+      }
+      setIsInitializing(false);
+    });
+
+    return () => unsubscribeAuth();
+  }, [view]);
+
+  useEffect(() => {
+    if (user) {
+      const q = query(collection(db, 'participations'), where('userId', '==', user.id));
       const unsubParticipations = onSnapshot(q, (snapshot) => {
         const parts = snapshot.docs.map(doc => ({
           meetingId: doc.data().meetingId,
@@ -43,12 +65,11 @@ const App: React.FC = () => {
         }));
         setParticipations(parts);
       });
-      return () => {
-        unsubUser();
-        unsubParticipations();
-      };
+      return () => unsubParticipations();
+    } else {
+      setParticipations([]);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const meetingsQuery = query(collection(db, 'meetings'));
@@ -88,9 +109,9 @@ const App: React.FC = () => {
     }
   }, [activeChatId, unreadMeetingIds]);
 
-  const handlePhoneAuthComplete = async (phoneData: { phone: string; age: number }) => {
+  const handleGoogleLoginComplete = async (firebaseUser: any) => {
     // 1개월 재가입 제한 체크
-    const restrictionRef = doc(db, 'restricted_users', phoneData.phone);
+    const restrictionRef = doc(db, 'restricted_users', firebaseUser.email);
     const restrictionSnap = await getDoc(restrictionRef);
 
     if (restrictionSnap.exists()) {
@@ -101,16 +122,22 @@ const App: React.FC = () => {
       if (now - withdrawnAt < thirtyDaysInMs) {
         const remainingDays = Math.ceil((thirtyDaysInMs - (now - withdrawnAt)) / (24 * 60 * 60 * 1000));
         alert(`탈퇴 후 1개월간 재가입이 제한됩니다. (약 ${remainingDays}일 남음)\n건강한 커뮤니티를 위해 조금만 기다려 주세요.`);
+        await signOut(auth);
         setView('HOME');
         return;
       }
     }
 
-    setTempProfile(prev => ({ ...prev, phone: phoneData.phone, age: phoneData.age }));
-    setView('PROFILE_SETUP');
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      setUser(userSnap.data() as UserProfile);
+      setView('HOME');
+    } else {
+      setView('PROFILE_SETUP');
+    }
   };
 
-  // handleDeclarationComplete handles user's beta declaration completion and pending actions.
   const handleDeclarationComplete = async (isCertified: boolean) => {
     if (!user) return;
     try {
@@ -129,15 +156,17 @@ const App: React.FC = () => {
   };
 
   const handleProfileSetupComplete = async (profileData: Partial<UserProfile>) => {
-    const userId = `user_${Date.now()}`;
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+
     const newUser: UserProfile = {
-      id: userId,
-      phone: tempProfile.phone || '',
+      id: firebaseUser.uid,
+      email: firebaseUser.email || '',
       nickname: profileData.nickname || '익명',
-      age: tempProfile.age || 35,
+      age: 35, // Default for 35+ community
       isCertified: false,
-      interests: profileData.interests || [],
-      bio: profileData.bio || '',
+      interests: [],
+      bio: '',
       location: profileData.location || '서울',
       followerCount: 0,
       followingCount: 0,
@@ -145,9 +174,8 @@ const App: React.FC = () => {
     };
 
     try {
-      await setDoc(doc(db, 'users', userId), newUser);
+      await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
       setUser(newUser);
-      localStorage.setItem('bihon_user_id', userId);
       setView('WELCOME');
     } catch (e) {
       console.error("Error adding user: ", e);
@@ -156,42 +184,51 @@ const App: React.FC = () => {
   };
 
   const handleWithdrawal = async () => {
-    if (!user) return;
+    if (!user || !auth.currentUser) return;
     if (window.confirm("정말로 탈퇴하시겠습니까? 탈퇴 후 1개월간 재가입이 금지됩니다.")) {
       try {
-        // 1. 재가입 제한 정보 기록 (휴대폰 번호 기준)
-        if (user.phone) {
-          await setDoc(doc(db, 'restricted_users', user.phone), {
-            phone: user.phone,
-            withdrawnAt: new Date()
-          });
-        }
+        const email = user.email;
+        const uid = user.id;
 
-        // 2. 참여 내역 삭제 및 모임 인원수 조정
-        const q = query(collection(db, 'participations'), where('userId', '==', user.id));
+        // 1. 재가입 제한 정보 기록
+        await setDoc(doc(db, 'restricted_users', email), {
+          email: email,
+          uid: uid,
+          withdrawnAt: new Date()
+        });
+
+        // 2. 참여 내역 삭제
+        const q = query(collection(db, 'participations'), where('userId', '==', uid));
         const snapshot = await getDocs(q);
-        const batchPromises = snapshot.docs.map(async (pDoc) => {
+        for (const pDoc of snapshot.docs) {
           const mId = pDoc.data().meetingId;
           const meetingRef = doc(db, 'meetings', mId);
-          const meetingSnap = await getDoc(meetingRef);
-          if (meetingSnap.exists()) {
-            await updateDoc(meetingRef, { currentParticipants: increment(-1) });
-          }
-          return deleteDoc(pDoc.ref);
-        });
-        await Promise.all(batchPromises);
+          await updateDoc(meetingRef, { currentParticipants: increment(-1) });
+          await deleteDoc(pDoc.ref);
+        }
 
         // 3. 유저 문서 삭제
-        await deleteDoc(doc(db, 'users', user.id));
+        await deleteDoc(doc(db, 'users', uid));
 
+        // 4. 로그아웃
+        await signOut(auth);
         setUser(null);
-        localStorage.removeItem('bihon_user_id');
         setView('HOME');
         alert("탈퇴 처리가 완료되었습니다. 1개월 이후 재가입이 가능합니다.");
       } catch (e) {
         console.error("Withdrawal error: ", e);
         alert("탈퇴 처리 중 오류가 발생했습니다.");
       }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setView('HOME');
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -290,8 +327,10 @@ const App: React.FC = () => {
   };
 
   const renderView = () => {
+    if (isInitializing) return <div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div></div>;
+
     switch (view) {
-      case 'AUTH_PHONE': return <PhoneAuthView onComplete={handlePhoneAuthComplete} onCancel={() => setView('HOME')} />;
+      case 'AUTH_PHONE': return <LoginView onComplete={handleGoogleLoginComplete} onCancel={() => setView('HOME')} />;
       case 'BETA_DECLARATION': return <DocumentUploadView onComplete={handleDeclarationComplete} onSkip={() => setView('HOME')} />;
       case 'PROFILE_SETUP': return <ProfileSetupView onComplete={handleProfileSetupComplete} />;
       case 'WELCOME': return <WelcomeView onFinish={() => setView('HOME')} />;
@@ -301,7 +340,7 @@ const App: React.FC = () => {
         return m ? <MeetingDetailView user={user} meeting={m} isJoined={participations.some(p => p.meetingId === m.id)} onJoin={handleJoinMeeting} onKickMembers={handleKickMembers} onBlockUser={handleBlockUser} onUnblockUser={handleUnblockUser} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} /> : null;
       }
       case 'CREATE_MEETING': return <CreateMeetingView user={user!} onComplete={handleCreateMeetingComplete} onBack={() => setView('HOME')} />;
-      case 'MY_PAGE': return <MyPageView user={user} participations={participations} allMeetings={meetings} onToggleVisibility={() => {}} onLogout={() => { setUser(null); localStorage.removeItem('bihon_user_id'); setView('HOME'); }} onWithdrawal={handleWithdrawal} onUpdateProfile={handleUpdateProfile} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onUnblockUser={handleUnblockUser} />;
+      case 'MY_PAGE': return <MyPageView user={user} participations={participations} allMeetings={meetings} onToggleVisibility={() => {}} onLogout={handleLogout} onWithdrawal={handleWithdrawal} onUpdateProfile={handleUpdateProfile} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onUnblockUser={handleUnblockUser} />;
       case 'CHATTING': return <MessagesView userParticipations={participations} allMeetings={meetings.filter(m => !user?.blockedUserIds.includes(m.hostId))} unreadMeetingIds={unreadMeetingIds} onSelectChat={(id) => { setActiveChatId(id); setView('CHAT_ROOM'); }} />;
       case 'CHAT_ROOM': {
         const m = meetings.find(meeting => meeting.id === activeChatId);

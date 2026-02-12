@@ -18,6 +18,14 @@ import {
   arrayUnion,
   arrayRemove
 } from "firebase/firestore";
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  deleteUser
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeOr0PbY930XoG7nn1ye5vDxeCtbvNBlo",
@@ -30,10 +38,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
-// Exporting necessary Firestore functionality for the application
 export { 
   db, 
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  deleteUser,
   collection, 
   doc, 
   setDoc, 
