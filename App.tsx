@@ -7,7 +7,7 @@ import {
   doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, 
   addDoc, increment, where, getDocs, deleteDoc, arrayUnion, arrayRemove, orderBy 
 } from './firebase';
-import LoginView from './views/LoginView';
+import PhoneAuthView from './views/PhoneAuthView';
 import DocumentUploadView from './views/DocumentUploadView';
 import ProfileSetupView from './views/ProfileSetupView';
 import WelcomeView from './views/WelcomeView';
@@ -16,6 +16,7 @@ import MeetingDetailView from './views/MeetingDetailView';
 import MyPageView from './views/MyPageView';
 import MessagesView from './views/MessagesView';
 import ChatRoomView from './views/ChatRoomView';
+import ChattingView from './views/MessagesView'; // Assuming Chatting is same as Messages
 import CreateMeetingView from './views/CreateMeetingView';
 import Header from './components/Header';
 import NavigationBar from './components/NavigationBar';
@@ -39,11 +40,8 @@ const App: React.FC = () => {
         
         if (userSnap.exists()) {
           setUser(userSnap.data() as UserProfile);
-          // If user exists and is at auth/setup view, take them home
           if (view === 'AUTH_PHONE' || view === 'PROFILE_SETUP') setView('HOME');
         } else {
-          // Firebase auth success but no profile, go to setup
-          // We don't set user state yet as profile isn't complete
           if (view !== 'PROFILE_SETUP') setView('PROFILE_SETUP');
         }
       } else {
@@ -109,9 +107,12 @@ const App: React.FC = () => {
     }
   }, [activeChatId, unreadMeetingIds]);
 
-  const handleGoogleLoginComplete = async (firebaseUser: any) => {
+  const handlePhoneAuthComplete = async (firebaseUser: any) => {
+    const phoneNumber = firebaseUser.phoneNumber;
+    if (!phoneNumber) return;
+
     // 1개월 재가입 제한 체크
-    const restrictionRef = doc(db, 'restricted_users', firebaseUser.email);
+    const restrictionRef = doc(db, 'restricted_users', phoneNumber);
     const restrictionSnap = await getDoc(restrictionRef);
 
     if (restrictionSnap.exists()) {
@@ -121,7 +122,7 @@ const App: React.FC = () => {
 
       if (now - withdrawnAt < thirtyDaysInMs) {
         const remainingDays = Math.ceil((thirtyDaysInMs - (now - withdrawnAt)) / (24 * 60 * 60 * 1000));
-        alert(`탈퇴 후 1개월간 재가입이 제한됩니다. (약 ${remainingDays}일 남음)\n건강한 커뮤니티를 위해 조금만 기다려 주세요.`);
+        alert(`탈퇴 후 1개월간 재가입이 제한됩니다. (약 ${remainingDays}일 남음)\n성숙한 비혼 커뮤니티를 위해 조금만 기다려 주세요.`);
         await signOut(auth);
         setView('HOME');
         return;
@@ -150,7 +151,7 @@ const App: React.FC = () => {
         setView('HOME');
       }
     } catch (e) {
-      console.error("Error in handleDeclarationComplete:", e);
+      console.error(e);
       alert("인증 처리 중 오류가 발생했습니다.");
     }
   };
@@ -161,9 +162,9 @@ const App: React.FC = () => {
 
     const newUser: UserProfile = {
       id: firebaseUser.uid,
-      email: firebaseUser.email || '',
+      phone: firebaseUser.phoneNumber || '',
       nickname: profileData.nickname || '익명',
-      age: 35, // Default for 35+ community
+      age: 35,
       isCertified: false,
       interests: [],
       bio: '',
@@ -178,7 +179,7 @@ const App: React.FC = () => {
       setUser(newUser);
       setView('WELCOME');
     } catch (e) {
-      console.error("Error adding user: ", e);
+      console.error(e);
       alert("프로필 저장 중 오류가 발생했습니다.");
     }
   };
@@ -187,17 +188,15 @@ const App: React.FC = () => {
     if (!user || !auth.currentUser) return;
     if (window.confirm("정말로 탈퇴하시겠습니까? 탈퇴 후 1개월간 재가입이 금지됩니다.")) {
       try {
-        const email = user.email;
+        const phoneNumber = user.phone;
         const uid = user.id;
 
-        // 1. 재가입 제한 정보 기록
-        await setDoc(doc(db, 'restricted_users', email), {
-          email: email,
+        await setDoc(doc(db, 'restricted_users', phoneNumber), {
+          phone: phoneNumber,
           uid: uid,
           withdrawnAt: new Date()
         });
 
-        // 2. 참여 내역 삭제
         const q = query(collection(db, 'participations'), where('userId', '==', uid));
         const snapshot = await getDocs(q);
         for (const pDoc of snapshot.docs) {
@@ -207,16 +206,13 @@ const App: React.FC = () => {
           await deleteDoc(pDoc.ref);
         }
 
-        // 3. 유저 문서 삭제
         await deleteDoc(doc(db, 'users', uid));
-
-        // 4. 로그아웃
         await signOut(auth);
         setUser(null);
         setView('HOME');
         alert("탈퇴 처리가 완료되었습니다. 1개월 이후 재가입이 가능합니다.");
       } catch (e) {
-        console.error("Withdrawal error: ", e);
+        console.error(e);
         alert("탈퇴 처리 중 오류가 발생했습니다.");
       }
     }
@@ -239,7 +235,7 @@ const App: React.FC = () => {
         await updateDoc(userRef, data);
         setUser({ ...user, ...data });
       } catch (e) {
-        console.error("Error updating profile: ", e);
+        console.error(e);
         throw e;
       }
     }
@@ -249,7 +245,7 @@ const App: React.FC = () => {
     if (!user) return;
     if (user.id === targetUserId) return;
     if (user.blockedUserIds.includes(targetUserId)) return;
-    if (window.confirm("이 사용자를 차단하시겠습니까? 차단 시 이 사용자의 모임과 메시지가 더 이상 보이지 않습니다.")) {
+    if (window.confirm("이 사용자를 차단하시겠습니까?")) {
       try {
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, { blockedUserIds: arrayUnion(targetUserId) });
@@ -260,12 +256,10 @@ const App: React.FC = () => {
   const handleUnblockUser = async (targetUserId: string) => {
     if (!user) return;
     if (!user.blockedUserIds.includes(targetUserId)) return;
-    if (window.confirm("이 사용자의 차단을 해제하시겠습니까?")) {
-      try {
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, { blockedUserIds: arrayRemove(targetUserId) });
-      } catch (e) { console.error(e); }
-    }
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, { blockedUserIds: arrayRemove(targetUserId) });
+    } catch (e) { console.error(e); }
   };
 
   const handleJoinMeeting = async (meetingId: string) => {
@@ -273,7 +267,7 @@ const App: React.FC = () => {
     const targetMeeting = meetings.find(m => m.id === meetingId);
     if (!targetMeeting) return;
     if (targetMeeting.currentParticipants >= targetMeeting.capacity) {
-      alert("이미 정원이 가득 찬 모임입니다.");
+      alert("정원이 가득 찼습니다.");
       return;
     }
     if (!user.isCertified) {
@@ -299,17 +293,15 @@ const App: React.FC = () => {
   };
 
   const handleKickMembers = async (meetingId: string, userIds: string[]) => {
-    if (userIds.length === 0) return;
     try {
       for (const uid of userIds) {
         const q = query(collection(db, 'participations'), where('meetingId', '==', meetingId), where('userId', '==', uid));
         const snapshot = await getDocs(q);
-        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-        await Promise.all(deletePromises);
+        for (const pDoc of snapshot.docs) await deleteDoc(pDoc.ref);
       }
       const meetingRef = doc(db, 'meetings', meetingId);
       await updateDoc(meetingRef, { currentParticipants: increment(-userIds.length) });
-    } catch (e) { console.error(e); alert("내보내기 실패"); }
+    } catch (e) { console.error(e); }
   };
 
   const handleCreateMeetingComplete = async (meetingData: Meeting) => {
@@ -330,7 +322,7 @@ const App: React.FC = () => {
     if (isInitializing) return <div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div></div>;
 
     switch (view) {
-      case 'AUTH_PHONE': return <LoginView onComplete={handleGoogleLoginComplete} onCancel={() => setView('HOME')} />;
+      case 'AUTH_PHONE': return <PhoneAuthView onComplete={handlePhoneAuthComplete} onCancel={() => setView('HOME')} />;
       case 'BETA_DECLARATION': return <DocumentUploadView onComplete={handleDeclarationComplete} onSkip={() => setView('HOME')} />;
       case 'PROFILE_SETUP': return <ProfileSetupView onComplete={handleProfileSetupComplete} />;
       case 'WELCOME': return <WelcomeView onFinish={() => setView('HOME')} />;

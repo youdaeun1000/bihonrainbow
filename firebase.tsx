@@ -20,11 +20,11 @@ import {
 } from "firebase/firestore";
 import { 
   getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
-  deleteUser
+  deleteUser,
+  RecaptchaVerifier,
+  signInWithPhoneNumber
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -39,16 +39,22 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+
+// Recaptcha verifier for phone auth
+export const createRecaptcha = (containerId: string) => {
+  return new RecaptchaVerifier(auth, containerId, {
+    'size': 'invisible',
+    'callback': () => {}
+  });
+};
 
 export { 
   db, 
   auth,
-  googleProvider,
-  signInWithPopup,
   signOut,
   onAuthStateChanged,
   deleteUser,
+  signInWithPhoneNumber,
   collection, 
   doc, 
   setDoc, 
