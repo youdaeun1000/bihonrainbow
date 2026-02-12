@@ -319,7 +319,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
                 : 'bg-[#2DD4BF] text-white hover:bg-[#28c1ad]'
             }`}
           >
-            {isPast ? '종료된 모임입니다' : isJoined ? '참여가 확정되었습니다' : isFull ? '모집이 완료되었습니다' : (user?.isCertified ? '참여 신청하기' : '신뢰 선언 후 참여')}
+            {isPast ? '종료된 모임입니다' : isJoined ? '참여가 확정되었습니다' : isFull ? '모집이 완료되었습니다' : '참여 신청하기'}
           </button>
         )}
       </div>

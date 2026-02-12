@@ -46,7 +46,6 @@ export interface ChatMessage {
 export type ViewState = 
   | 'HOME' 
   | 'AUTH_PHONE' 
-  | 'BETA_DECLARATION' 
   | 'PROFILE_SETUP' 
   | 'WELCOME' 
   | 'MEETING_DETAIL' 
