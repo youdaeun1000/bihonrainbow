@@ -12,6 +12,7 @@ import MyPageView from './views/MyPageView';
 import MessagesView from './views/MessagesView';
 import ChatRoomView from './views/ChatRoomView';
 import CreateMeetingView from './views/CreateMeetingView';
+import EditMeetingView from './views/EditMeetingView';
 import Header from './components/Header';
 import NavigationBar from './components/NavigationBar';
 
@@ -114,7 +115,7 @@ const App: React.FC = () => {
       phone: tempProfile.phone || '',
       nickname: profileData.nickname || '익명',
       age: tempProfile.age || 35,
-      isCertified: true, // 선언 절차를 없애고 가입 시 기본 인증 상태로 설정
+      isCertified: true,
       interests: profileData.interests || [],
       bio: profileData.bio || '',
       location: profileData.location || '서울',
@@ -131,6 +132,67 @@ const App: React.FC = () => {
     } catch (e) {
       console.error("Error adding user: ", e);
       alert("프로필 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleBlockUser = async (targetId: string) => {
+    if (!user || user.id === targetId) return;
+    if (!window.confirm("이 사용자를 차단하시겠습니까? 차단된 사용자의 모임과 메시지가 더 이상 보이지 않습니다.")) return;
+    
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, {
+        blockedUserIds: arrayUnion(targetId)
+      });
+    } catch (e) {
+      console.error("Block error:", e);
+      alert("차단 처리 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleUnblockUser = async (targetId: string) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, {
+        blockedUserIds: arrayRemove(targetId)
+      });
+    } catch (e) {
+      console.error("Unblock error:", e);
+      alert("차단 해제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleDeleteMeeting = async (meetingId: string) => {
+    if (!window.confirm("정말로 이 모임을 삭제하시겠습니까? 삭제된 정보는 복구할 수 없습니다.")) return;
+    try {
+      // 1. 참여 정보 삭제
+      const q = query(collection(db, 'participations'), where('meetingId', '==', meetingId));
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      // 2. 모임 문서 삭제
+      await deleteDoc(doc(db, 'meetings', meetingId));
+      
+      setView('HOME');
+      alert("모임이 삭제되었습니다.");
+    } catch (e) {
+      console.error("Delete meeting error:", e);
+      alert("모임 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleUpdateMeeting = async (meetingId: string, updatedData: Partial<Meeting>) => {
+    try {
+      const meetingRef = doc(db, 'meetings', meetingId);
+      await updateDoc(meetingRef, updatedData);
+      setSelectedMeetingId(meetingId);
+      setView('MEETING_DETAIL');
+      alert("모임 정보가 수정되었습니다.");
+    } catch (e) {
+      console.error("Update meeting error:", e);
+      alert("모임 수정 중 오류가 발생했습니다.");
     }
   };
 
@@ -243,25 +305,29 @@ const App: React.FC = () => {
       case 'HOME': return <HomeView user={user} meetings={meetings.filter(m => !user?.blockedUserIds.includes(m.hostId))} onSelectMeeting={(id) => { setActiveChatId(null); setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => { if (!user) setView('AUTH_PHONE'); else setView('CREATE_MEETING'); }} />;
       case 'MEETING_DETAIL': {
         const m = meetings.find(meeting => meeting.id === selectedMeetingId);
-        return m ? <MeetingDetailView user={user} meeting={m} isJoined={participations.some(p => p.meetingId === m.id)} onJoin={handleJoinMeeting} onKickMembers={handleKickMembers} onBlockUser={(targetId) => {}} onUnblockUser={(targetId) => {}} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} /> : null;
+        return m ? <MeetingDetailView user={user} meeting={m} isJoined={participations.some(p => p.meetingId === m.id)} onJoin={handleJoinMeeting} onKickMembers={handleKickMembers} onBlockUser={handleBlockUser} onUnblockUser={handleUnblockUser} onDeleteMeeting={handleDeleteMeeting} onEditMeeting={() => setView('EDIT_MEETING')} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} /> : null;
       }
       case 'CREATE_MEETING': return <CreateMeetingView user={user!} onComplete={handleCreateMeetingComplete} onBack={() => setView('HOME')} />;
-      case 'MY_PAGE': return <MyPageView user={user} participations={participations} allMeetings={meetings} onToggleVisibility={() => {}} onLogout={() => { setUser(null); localStorage.removeItem('bihon_user_id'); setView('HOME'); }} onWithdrawal={handleWithdrawal} onUpdateProfile={handleUpdateProfile} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onUnblockUser={(targetId) => {}} />;
+      case 'EDIT_MEETING': {
+        const m = meetings.find(meeting => meeting.id === selectedMeetingId);
+        return m ? <EditMeetingView meeting={m} onComplete={(data) => handleUpdateMeeting(m.id, data)} onBack={() => setView('MEETING_DETAIL')} /> : null;
+      }
+      case 'MY_PAGE': return <MyPageView user={user} participations={participations} allMeetings={meetings} onToggleVisibility={() => {}} onLogout={() => { setUser(null); localStorage.removeItem('bihon_user_id'); setView('HOME'); }} onWithdrawal={handleWithdrawal} onUpdateProfile={handleUpdateProfile} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onUnblockUser={handleUnblockUser} />;
       case 'CHATTING': return <MessagesView userParticipations={participations} allMeetings={meetings.filter(m => !user?.blockedUserIds.includes(m.hostId))} unreadMeetingIds={unreadMeetingIds} onSelectChat={(id) => { setActiveChatId(id); setView('CHAT_ROOM'); }} />;
       case 'CHAT_ROOM': {
         const m = meetings.find(meeting => meeting.id === activeChatId);
-        return user && m ? <ChatRoomView user={user} meeting={m} onBack={() => setView('CHATTING')} onShowDetail={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onBlockUser={(targetId) => {}} /> : null;
+        return user && m ? <ChatRoomView user={user} meeting={m} onBack={() => setView('CHATTING')} onShowDetail={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onBlockUser={handleBlockUser} /> : null;
       }
       default: return <HomeView user={user} meetings={meetings} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => setView('CREATE_MEETING')} />;
     }
   };
 
-  const showHeader = ['HOME', 'MEETING_DETAIL', 'MY_PAGE', 'CHATTING', 'CREATE_MEETING', 'AUTH_PHONE', 'PROFILE_SETUP'].includes(view);
+  const showHeader = ['HOME', 'MEETING_DETAIL', 'MY_PAGE', 'CHATTING', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_PHONE', 'PROFILE_SETUP'].includes(view);
   const showNav = ['HOME', 'MY_PAGE', 'CHATTING'].includes(view);
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-white relative border-x border-slate-100 shadow-sm">
-      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'AUTH_PHONE', 'PROFILE_SETUP'].includes(view)} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} />}
+      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_PHONE', 'PROFILE_SETUP'].includes(view)} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} />}
       <main className={`flex-1 overflow-y-auto ${showNav ? 'pb-32' : 'pb-16'}`}>
         <div className="page-enter">{renderView()}</div>
       </main>

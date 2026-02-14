@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Meeting, UserProfile } from '../types';
 import { db, collection, query, where, onSnapshot, getDoc, doc } from '../firebase';
 
@@ -11,6 +11,8 @@ interface MeetingDetailViewProps {
   onKickMembers: (meetingId: string, userIds: string[]) => Promise<void>;
   onBlockUser: (targetUserId: string) => Promise<void>;
   onUnblockUser: (targetUserId: string) => Promise<void>;
+  onDeleteMeeting: (meetingId: string) => Promise<void>;
+  onEditMeeting: () => void;
   onBack: () => void;
 }
 
@@ -19,7 +21,18 @@ interface ParticipantInfo {
   nickname: string;
 }
 
-const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, isJoined, onJoin, onKickMembers, onBlockUser, onUnblockUser, onBack }) => {
+const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ 
+  user, 
+  meeting, 
+  isJoined, 
+  onJoin, 
+  onKickMembers, 
+  onBlockUser, 
+  onUnblockUser, 
+  onDeleteMeeting,
+  onEditMeeting,
+  onBack 
+}) => {
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(true);
   const [isManageMode, setIsManageMode] = useState(false);
@@ -28,7 +41,12 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
 
   const isHost = user?.id === meeting.hostId;
   const isFull = meeting.currentParticipants >= meeting.capacity;
-  const isPast = new Date(meeting.date).getTime() < new Date().getTime();
+  
+  const isPast = useMemo(() => {
+    const meetingTime = new Date(meeting.date).getTime();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+    return meetingTime + oneDayInMs < new Date().getTime();
+  }, [meeting.date]);
 
   useEffect(() => {
     if (!meeting.id) return;
@@ -84,7 +102,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
   return (
     <div className={`flex flex-col pb-48 page-enter min-h-screen ${isPast ? 'bg-slate-50' : 'bg-white'}`}>
       {/* Action Bar Header */}
-      <header className="h-20 flex items-center justify-between px-6 bg-white sticky top-0 z-20">
+      <header className="h-20 flex items-center justify-between px-6 bg-white sticky top-0 z-20 border-b border-slate-50">
         <button 
           onClick={onBack}
           className="p-2 -ml-2 text-slate-400 hover:text-slate-600 transition-colors"
@@ -93,28 +111,44 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
+        
         <div className="flex flex-col items-center">
            <span className="text-[11px] font-black text-teal-500 uppercase tracking-widest">Detail View</span>
            {isPast && <span className="text-[10px] font-bold text-rose-400 uppercase tracking-tighter">종료된 모임</span>}
         </div>
-        <div className="w-10">
-          {isHost && participants.length > 1 && !isPast && (
-            <button 
-              onClick={() => {
-                setIsManageMode(!isManageMode);
-                setSelectedIds([]);
-              }}
-              className={`text-[11px] font-bold px-3 py-1.5 rounded-full transition-all ${isManageMode ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-500'}`}
-            >
-              {isManageMode ? '취소' : '관리'}
-            </button>
+
+        <div className="flex items-center gap-2">
+          {isHost && !isPast && (
+            <>
+              <button 
+                onClick={onEditMeeting}
+                className="text-[11px] font-bold text-slate-400 hover:text-teal-500 transition-colors"
+              >
+                수정
+              </button>
+              <button 
+                onClick={() => onDeleteMeeting(meeting.id)}
+                className="text-[11px] font-bold text-slate-300 hover:text-rose-500 transition-colors"
+              >
+                삭제
+              </button>
+              <button 
+                onClick={() => {
+                  setIsManageMode(!isManageMode);
+                  setSelectedIds([]);
+                }}
+                className={`text-[11px] font-bold px-3 py-1.5 rounded-full transition-all ${isManageMode ? 'bg-rose-50 text-rose-500' : 'bg-slate-100 text-slate-500'}`}
+              >
+                {isManageMode ? '취소' : '멤버관리'}
+              </button>
+            </>
           )}
         </div>
       </header>
 
       <div className="px-6 flex flex-col gap-10">
         {/* Core Header */}
-        <header className="flex flex-col gap-4 pt-4">
+        <header className="flex flex-col gap-4 pt-8">
           <div className="flex items-center justify-between">
              <span className={`px-3 py-1 text-[11px] font-bold rounded-full ${isPast ? 'bg-slate-200 text-slate-500' : 'bg-teal-50 text-teal-600'}`}>
                 {meeting.category}
@@ -164,7 +198,7 @@ const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({ user, meeting, is
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${isPast ? 'bg-white text-slate-400' : 'bg-white text-teal-500'}`}>
                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.998 5.998 0 00-5.48-5.974m0 0a6.001 6.001 0 00-5.481 5.974m10.962 0A10.4 10.4 0 0112 21.01m-5.962-2.292a10.4 10.4 0 01-5.962-2.292m0 0a3 3 0 014.681-2.72m4.681 2.72l-.001.031c0 .225.012.447.037.666A11.944 11.944 0 0112 21c2.17 0 4.207-.576 5.963-1.584" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.998 5.998 0 00-5.48-5.974m0 0a6.001 6.001 0 00-5.481 5.974m10.962 0A10.4 10.4 0 0112 21.01m-5.962-2.292a10.4 10.4 0 01-5.962-2.292m0 0a3 3 0 014.681-2.72m4.681 2.72l-.001.031c0 .225.012.447.037.666A11.944 11.944 0 0112 21c2.17 0 4.207-.576-5.963-1.584" />
                </svg>
             </div>
             <div className="flex flex-col">

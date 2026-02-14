@@ -52,4 +52,5 @@ export type ViewState =
   | 'MY_PAGE' 
   | 'CHATTING' 
   | 'CHAT_ROOM'
-  | 'CREATE_MEETING';
+  | 'CREATE_MEETING'
+  | 'EDIT_MEETING';

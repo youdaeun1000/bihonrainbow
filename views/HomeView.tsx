@@ -19,12 +19,14 @@ const HomeView: React.FC<HomeViewProps> = ({ user, meetings, onSelectMeeting, on
 
   const filteredAndSortedMeetings = useMemo(() => {
     const now = new Date().getTime();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
     
-    // 1. 카테고리 필터링 및 "날짜가 지나지 않은 모임"만 추출
+    // 1. 카테고리 필터링 및 "모임 시간으로부터 하루가 지나지 않은 모임"만 추출
     let result = meetings.filter(m => {
-      const isFuture = new Date(m.date).getTime() >= now;
+      const meetingTime = new Date(m.date).getTime();
+      const isActive = meetingTime + oneDayInMs >= now;
       const categoryMatch = selectedCategory === '전체' || m.category === selectedCategory;
-      return isFuture && categoryMatch;
+      return isActive && categoryMatch;
     });
 
     // 2. 정렬 로직 적용

@@ -61,6 +61,8 @@ const MyPageView: React.FC<MyPageViewProps> = ({
 
   const { upcomingMeetings, pastMeetings } = useMemo(() => {
     const now = new Date().getTime();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+    
     const joined = participations
       .map(p => {
         const meeting = allMeetings.find(m => m.id === p.meetingId);
@@ -69,10 +71,12 @@ const MyPageView: React.FC<MyPageViewProps> = ({
       })
       .filter((m): m is (Meeting & { isPrivate: boolean }) => m !== null);
 
-    const upcoming = joined.filter(m => new Date(m.date).getTime() >= now)
+    // 모임 시간으로부터 24시간이 지나지 않았으면 '진행 예정(또는 현재 진행)'으로 분류
+    const upcoming = joined.filter(m => new Date(m.date).getTime() + oneDayInMs >= now)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    const past = joined.filter(m => new Date(m.date).getTime() < now)
+    // 모임 시간으로부터 24시간이 지나야 '참여 완료'로 분류
+    const past = joined.filter(m => new Date(m.date).getTime() + oneDayInMs < now)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return { upcomingMeetings: upcoming, pastMeetings: past };
@@ -82,7 +86,6 @@ const MyPageView: React.FC<MyPageViewProps> = ({
     if (!editNickname.trim()) return;
     setIsSaving(true);
     try {
-      // bio와 interests는 빈 값으로 유지하거나 기존 값을 보존 (여기서는 삭제 요청에 따라 빈 값 전달)
       await onUpdateProfile({ 
         nickname: editNickname, 
         bio: '', 
