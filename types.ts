@@ -6,7 +6,7 @@ export interface UserParticipation {
 
 export interface UserProfile {
   id: string;
-  phone: string;
+  email: string;
   nickname: string;
   age: number;
   isCertified: boolean;
@@ -45,7 +45,8 @@ export interface ChatMessage {
 
 export type ViewState = 
   | 'HOME' 
-  | 'AUTH_PHONE' 
+  | 'AUTH_EMAIL' 
+  | 'VERIFY_EMAIL'
   | 'PROFILE_SETUP' 
   | 'WELCOME' 
   | 'MEETING_DETAIL' 

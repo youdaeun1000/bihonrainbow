@@ -18,6 +18,16 @@ import {
   arrayUnion,
   arrayRemove
 } from "firebase/firestore";
+import { 
+  getAuth, 
+  signInAnonymously, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  onAuthStateChanged,
+  signOut,
+  sendEmailVerification,
+  reload
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDeOr0PbY930XoG7nn1ye5vDxeCtbvNBlo",
@@ -30,10 +40,19 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-// Exporting necessary Firestore functionality for the application
+// Exporting necessary Firestore and Auth functionality
 export { 
   db, 
+  auth,
+  signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  sendEmailVerification,
+  reload,
   collection, 
   doc, 
   setDoc, 
