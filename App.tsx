@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewState, UserProfile, Meeting, UserParticipation } from './types';
 import { MOCK_MEETINGS } from './constants';
-import { db, auth, onAuthStateChanged, signOut, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc, arrayUnion, arrayRemove, orderBy } from './firebase';
+import { db, auth, onAuthStateChanged, signOut, deleteUser, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, addDoc, increment, where, getDocs, deleteDoc, arrayUnion, arrayRemove, orderBy } from './firebase';
 import EmailAuthView from './views/EmailAuthView';
 import EmailVerificationView from './views/EmailVerificationView';
 import ProfileSetupView from './views/ProfileSetupView';
@@ -14,6 +14,7 @@ import MessagesView from './views/MessagesView';
 import ChatRoomView from './views/ChatRoomView';
 import CreateMeetingView from './views/CreateMeetingView';
 import EditMeetingView from './views/EditMeetingView';
+import SubscriptionView from './views/SubscriptionView';
 import Header from './components/Header';
 import NavigationBar from './components/NavigationBar';
 
@@ -127,6 +128,7 @@ const App: React.FC = () => {
       nickname: profileData.nickname || '익명',
       age: tempProfile.age || 35,
       isCertified: false,
+      isSubscribed: false, // 기본값 미구독
       interests: profileData.interests || [],
       bio: profileData.bio || '',
       location: profileData.location || '서울',
@@ -203,30 +205,54 @@ const App: React.FC = () => {
   };
 
   const handleWithdrawal = async () => {
-    if (!user) return;
-    if (window.confirm("정말로 탈퇴하시겠습니까? 탈퇴 후 1개월간 재가입이 금지됩니다.")) {
-      try {
-        const q = query(collection(db, 'participations'), where('userId', '==', user.id));
-        const snapshot = await getDocs(q);
-        const batchPromises = snapshot.docs.map(async (pDoc) => {
-          const mId = pDoc.data().meetingId;
-          const meetingRef = doc(db, 'meetings', mId);
-          const meetingSnap = await getDoc(meetingRef);
-          if (meetingSnap.exists()) {
-            await updateDoc(meetingRef, { currentParticipants: increment(-1) });
-          }
-          return deleteDoc(pDoc.ref);
-        });
-        await Promise.all(batchPromises);
-        await deleteDoc(doc(db, 'users', user.id));
-        await signOut(auth);
-        setUser(null);
-        setView('HOME');
-        alert("탈퇴 처리가 완료되었습니다.");
-      } catch (e) {
-        console.error("Withdrawal error: ", e);
-        alert("탈퇴 처리 중 오류가 발생했습니다.");
+    if (!user || !auth.currentUser) return;
+    const confirmWithdrawal = window.confirm("정말로 탈퇴하시겠습니까?\n작성하신 모임과 프로필 정보가 모두 삭제되며 복구할 수 없습니다.");
+    if (!confirmWithdrawal) return;
+
+    try {
+      const currentUserId = user.id;
+      const hostMeetingsQuery = query(collection(db, 'meetings'), where('hostId', '==', currentUserId));
+      const hostMeetingsSnapshot = await getDocs(hostMeetingsQuery);
+      
+      for (const mDoc of hostMeetingsSnapshot.docs) {
+        const meetingId = mDoc.id;
+        const pQuery = query(collection(db, 'participations'), where('meetingId', '==', meetingId));
+        const pSnapshot = await getDocs(pQuery);
+        await Promise.all(pSnapshot.docs.map(d => deleteDoc(d.ref)));
+        await deleteDoc(mDoc.ref);
       }
+
+      const userParticipationsQuery = query(collection(db, 'participations'), where('userId', '==', currentUserId));
+      const userParticipationsSnapshot = await getDocs(userParticipationsQuery);
+      
+      for (const pDoc of userParticipationsSnapshot.docs) {
+        const mId = pDoc.data().meetingId;
+        const meetingRef = doc(db, 'meetings', mId);
+        const meetingSnap = await getDoc(meetingRef);
+        if (meetingSnap.exists()) {
+          await updateDoc(meetingRef, { currentParticipants: increment(-1) });
+        }
+        await deleteDoc(pDoc.ref);
+      }
+
+      await deleteDoc(doc(db, 'users', currentUserId));
+      try {
+        await deleteUser(auth.currentUser);
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/requires-recent-login') {
+          alert("보안을 위해 다시 로그인한 후 탈퇴를 진행해 주세요.");
+          await signOut(auth);
+          setView('AUTH_EMAIL');
+          return;
+        }
+        throw authErr;
+      }
+      setUser(null);
+      setView('HOME');
+      alert("탈퇴 처리가 정상적으로 완료되었습니다. 그동안 이용해 주셔서 감사합니다.");
+    } catch (e: any) {
+      console.error("Withdrawal error: ", e);
+      alert("탈퇴 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     }
   };
 
@@ -245,6 +271,14 @@ const App: React.FC = () => {
 
   const handleJoinMeeting = async (meetingId: string) => {
     if (!user) { setView('AUTH_EMAIL'); return; }
+    
+    // 구독 여부 체크
+    if (!user.isSubscribed) {
+      setSelectedMeetingId(meetingId);
+      setView('SUBSCRIPTION');
+      return;
+    }
+
     const targetMeeting = meetings.find(m => m.id === meetingId);
     if (!targetMeeting) return;
     if (targetMeeting.currentParticipants >= targetMeeting.capacity) {
@@ -267,6 +301,23 @@ const App: React.FC = () => {
     }
     setActiveChatId(meetingId);
     setView('CHAT_ROOM');
+  };
+
+  const handleSubscribeComplete = async () => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, { isSubscribed: true });
+      setUser({ ...user, isSubscribed: true });
+      if (selectedMeetingId) {
+        setView('MEETING_DETAIL');
+      } else {
+        setView('HOME');
+      }
+    } catch (e) {
+      console.error(e);
+      alert("구독 처리 중 오류가 발생했습니다.");
+    }
   };
 
   const handleKickMembers = async (meetingId: string, userIds: string[]) => {
@@ -325,17 +376,22 @@ const App: React.FC = () => {
         const m = meetings.find(meeting => meeting.id === activeChatId);
         return user && m ? <ChatRoomView user={user} meeting={m} onBack={() => setView('CHATTING')} onShowDetail={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onBlockUser={handleBlockUser} /> : null;
       }
+      case 'SUBSCRIPTION': return <SubscriptionView onComplete={handleSubscribeComplete} onBack={() => setView('MEETING_DETAIL')} />;
       default: return <HomeView user={user} meetings={meetings} onSelectMeeting={(id) => { setSelectedMeetingId(id); setView('MEETING_DETAIL'); }} onCreateClick={() => setView('CREATE_MEETING')} />;
     }
   };
 
-  const showHeader = ['HOME', 'MEETING_DETAIL', 'MY_PAGE', 'CHATTING', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_EMAIL', 'VERIFY_EMAIL', 'PROFILE_SETUP'].includes(view);
+  const showHeader = ['HOME', 'MEETING_DETAIL', 'MY_PAGE', 'CHATTING', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_EMAIL', 'VERIFY_EMAIL', 'PROFILE_SETUP', 'SUBSCRIPTION'].includes(view);
   const showNav = ['HOME', 'MY_PAGE', 'CHATTING'].includes(view);
   const isChatRoom = view === 'CHAT_ROOM';
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-white relative border-x border-slate-100 shadow-sm overflow-hidden">
-      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_EMAIL', 'VERIFY_EMAIL', 'PROFILE_SETUP'].includes(view)} onBack={() => activeChatId ? setView('CHAT_ROOM') : setView('HOME')} />}
+      {showHeader && <Header title={view === 'HOME' ? '비혼뒤맑음' : ''} showBack={['MEETING_DETAIL', 'CREATE_MEETING', 'EDIT_MEETING', 'AUTH_EMAIL', 'VERIFY_EMAIL', 'PROFILE_SETUP', 'SUBSCRIPTION'].includes(view)} onBack={() => {
+        if (view === 'SUBSCRIPTION') setView('MEETING_DETAIL');
+        else if (activeChatId) setView('CHAT_ROOM');
+        else setView('HOME');
+      }} />}
       <main className={`flex-1 flex flex-col ${isChatRoom ? 'overflow-hidden' : 'overflow-y-auto'} ${showNav ? 'pb-32' : isChatRoom ? 'pb-0' : 'pb-16'}`}>
         <div className={`page-enter ${isChatRoom ? 'h-full' : ''}`}>{renderView()}</div>
       </main>

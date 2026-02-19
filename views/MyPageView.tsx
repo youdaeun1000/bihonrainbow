@@ -36,6 +36,7 @@ const MyPageView: React.FC<MyPageViewProps> = ({
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [showBlockedList, setShowBlockedList] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     if (showBlockedList && user?.blockedUserIds && user.blockedUserIds.length > 0) {
@@ -82,13 +83,21 @@ const MyPageView: React.FC<MyPageViewProps> = ({
   }, [participations, allMeetings]);
 
   const handleSave = async () => {
-    if (!editNickname.trim()) return;
+    if (!editNickname.trim()) {
+      alert("닉네임을 입력해 주세요.");
+      return;
+    }
+    if (editNickname.length < 2) {
+      alert("닉네임은 최소 2자 이상이어야 합니다.");
+      return;
+    }
+    
     setIsSaving(true);
     try {
       await onUpdateProfile({ 
         nickname: editNickname, 
-        bio: '', 
-        interests: [] 
+        bio: user?.bio || '', 
+        interests: user?.interests || [] 
       });
       setIsEditing(false);
     } catch (e) {
@@ -169,20 +178,67 @@ const MyPageView: React.FC<MyPageViewProps> = ({
   }
 
   return (
-    <div className="flex flex-col gap-12 px-6 pt-10 pb-40 page-enter">
+    <div className="flex flex-col gap-12 px-6 pt-10 pb-40 page-enter relative">
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 animate-fadeIn">
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setShowLogoutConfirm(false)}
+          ></div>
+          <div className="relative bg-white w-full max-w-xs rounded-[40px] p-8 shadow-2xl flex flex-col items-center text-center gap-6 scale-enter">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
+                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+               </svg>
+            </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-lg font-bold text-slate-800">벌써 가시나요?</h3>
+              <p className="text-xs text-slate-400 font-light leading-relaxed">
+                언제든 다시 돌아오세요.<br/>비혼뒤맑음은 항상 열려있습니다.
+              </p>
+            </div>
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-4 text-xs font-bold text-slate-400 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all"
+              >
+                취소
+              </button>
+              <button 
+                onClick={onLogout}
+                className="flex-1 py-4 text-xs font-bold text-white bg-teal-500 rounded-2xl shadow-lg shadow-teal-500/20 hover:bg-teal-600 transition-all active:scale-95"
+              >
+                로그아웃
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Profile Header */}
       <section className="flex flex-col items-center gap-6 relative">
-        <div className="absolute top-0 right-0">
+        <div className="absolute top-0 right-0 z-10 flex flex-col items-end gap-2">
           {!isEditing ? (
-            <button 
-              onClick={() => {
-                setIsEditing(true);
-                setEditNickname(user.nickname);
-              }}
-              className="text-xs font-bold text-teal-500 bg-teal-50 px-4 py-2 rounded-full hover:bg-teal-100 transition-all"
-            >
-              수정하기
-            </button>
+            <>
+              <button 
+                onClick={() => {
+                  setIsEditing(true);
+                  setEditNickname(user.nickname);
+                }}
+                className="text-xs font-bold text-teal-500 bg-teal-50 px-4 py-2 rounded-full hover:bg-teal-100 transition-all"
+              >
+                수정하기
+              </button>
+              {user.isSubscribed && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500 text-white rounded-full text-[10px] font-bold shadow-lg shadow-teal-500/10">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                    <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
+                  </svg>
+                  맑은 삶 패스
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex gap-2">
               <button 
@@ -190,14 +246,14 @@ const MyPageView: React.FC<MyPageViewProps> = ({
                     setIsEditing(false); 
                     setEditNickname(user.nickname); 
                 }}
-                className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-2 rounded-full"
+                className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-2 rounded-full hover:bg-slate-100 transition-all"
               >
                 취소
               </button>
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="text-xs font-bold text-white bg-teal-500 px-4 py-2 rounded-full shadow-md disabled:bg-slate-200"
+                className="text-xs font-bold text-white bg-teal-500 px-4 py-2 rounded-full shadow-md disabled:bg-slate-200 transition-all active:scale-95"
               >
                 {isSaving ? '...' : '저장'}
               </button>
@@ -221,7 +277,21 @@ const MyPageView: React.FC<MyPageViewProps> = ({
         </div>
 
         <div className="flex flex-col items-center gap-3 w-full">
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{isEditing ? '프로필 수정' : user.nickname}</h2>
+          {isEditing ? (
+            <div className="w-full max-w-[200px] animate-fadeIn">
+              <input
+                type="text"
+                autoFocus
+                value={editNickname}
+                onChange={(e) => setEditNickname(e.target.value)}
+                placeholder="새 닉네임 입력"
+                className="w-full px-4 py-2 text-center text-lg font-bold text-slate-800 bg-white border-2 border-teal-100 rounded-2xl focus:outline-none focus:border-teal-400 transition-all"
+              />
+              <p className="text-[10px] text-teal-500 mt-2 text-center font-medium">변경할 닉네임을 입력해 주세요.</p>
+            </div>
+          ) : (
+            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{user.nickname}</h2>
+          )}
           <span className="text-[11px] text-slate-400 font-medium px-4 py-1 bg-slate-50 rounded-full border border-slate-100">{user.email}</span>
         </div>
       </section>
@@ -311,7 +381,7 @@ const MyPageView: React.FC<MyPageViewProps> = ({
           </button>
 
           <button 
-            onClick={onLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className="flex items-center gap-3 py-4 px-1 group transition-colors active:opacity-60"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -332,7 +402,7 @@ const MyPageView: React.FC<MyPageViewProps> = ({
         </div>
 
         <div className="mt-4 text-center">
-          <p className="text-[9px] text-slate-200 font-medium uppercase tracking-widest">Version 1.1.0 (Email Auth)</p>
+          <p className="text-[9px] text-slate-200 font-medium uppercase tracking-widest">Version 1.2.0 (Premium Pass)</p>
         </div>
       </section>
     </div>

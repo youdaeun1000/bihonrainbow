@@ -26,7 +26,8 @@ import {
   onAuthStateChanged,
   signOut,
   sendEmailVerification,
-  reload
+  reload,
+  deleteUser
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -53,6 +54,7 @@ export {
   signOut,
   sendEmailVerification,
   reload,
+  deleteUser,
   collection, 
   doc, 
   setDoc, 
